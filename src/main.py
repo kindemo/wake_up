@@ -45,7 +45,7 @@ print('Commands:', commands)
 # 从数据文件夹中加载音频数据集，分为训练集和验证集，设置了批量大小、验证集比例、随机种子、输出序列长度等参数
 train_ds, val_ds = tf.keras.utils.audio_dataset_from_directory(
     directory=data_dir,
-    batch_size=12,      # 每次从数据集中取出 10 个音频样本进行训练或验证
+    batch_size=12,      # 每次从数据集中取出 12 个音频样本进行训练或验证
     validation_split=0.2,   # 从整个数据集中随机选取 20% 的数据作为验证集，剩余 80% 的数据作为训练集
     seed=0,
     output_sequence_length=16000,
@@ -170,22 +170,21 @@ x = residual_block(x, filters=64, kernel_size=3, stride=2, l2_reg=l2_reg)
 
 x = layers.MaxPooling2D()(x)
 x = layers.Dropout(0.3)(x)
-x = layers.Flatten()(x)
+x = layers.Flatten()(x)     # 平展为一维向量
 x = layers.Dense(64, kernel_regularizer=l2_reg)(x)
-x = layers.BatchNormalization()(x)
+# x = layers.BatchNormalization()(x)
 x = layers.Activation('relu')(x)
 x = layers.Dropout(0.5)(x)
-outputs = layers.Dense(num_labels)(x)
+outputs = layers.Dense(1, activation='sigmoid')(x)
 
 # 构建模型
 model = models.Model(inputs=inputs, outputs=outputs)
 model.summary()
 
-
 # Adam 优化器
 model.compile(
-    optimizer=tf.keras.optimizers.Adam(),
-    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer='adam',
+    loss='binary_crossentropy',
     metrics=['accuracy'],
 )
 
@@ -267,9 +266,8 @@ plt.ylabel('Label')
 plt.show()
 
 
-# x = data_dir/'yes/0f3f64d5_nohash_1.wav'
-# x = data_dir/'wake_words/ttsmaker-file-2025-1-21-10-47-20.wav'
-x = '../verify/yang_21_1.wav'
+x = data_dir/'wake_words/ttsmaker-file-2025-1-21-10-47-20.wav'
+# x = '../verify/yang_21_1.wav'
 
 
 # 将输入转换为16bit的音频
@@ -284,9 +282,13 @@ x = x[tf.newaxis,...]   # 转化为批次的形式
 
 prediction = model(x)
 print("prediction:", prediction)
-x_labels = ['Non-wake-up_words', 'wake_words']
-plt.bar(x_labels, tf.nn.softmax(prediction[0]))
-plt.title('no')
+
+x_labels = ['wake_words_probability']
+wake_word_probability = prediction.numpy()[0][0]  # 提取概率值
+plt.bar(x_labels, [wake_word_probability])
+
+plt.title('yang')
+plt.ylabel('Probability')
 plt.show()
 
 display.display(display.Audio(waveform, rate=16000))
