@@ -5,7 +5,7 @@ from tensorflow.keras import layers, models,Input
 
 # 用于删除音频数据的额外轴，因为音频数据只包含单声道
 def squeeze(audio, labels):
-    print(f'通道前：{audio.shape}')
+    # print(f'通道前：{audio.shape}')
     # 如果音频是双声道，取平均值转换为单声道
     # 检查是否为双声道或多声道
     if len(audio.shape) > 2 and audio.shape[-1] is None:  # 如果有多个通道
@@ -13,7 +13,7 @@ def squeeze(audio, labels):
     # 删除最后一个维度
     if len(audio.shape) > 2 and audio.shape[-1] == 1:
         audio = tf.squeeze(audio, axis=-1)
-    print(f'通道后：{audio.shape}')
+    # print(f'通道后：{audio.shape}')
     return audio, labels
 
 

@@ -24,6 +24,7 @@ def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize
 
         # 绘制频谱图
         plot_spectrogram(spectrograms[i].numpy(), ax)
+        # print(f"Spectrogram {i} shape: {spectrograms.shape}")
 
         # 设置标题
         label_index = labels[i].numpy()

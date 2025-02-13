@@ -53,7 +53,7 @@ if os.path.exists(scp_file_path):
         scp_files = [line.strip() for line in scp_file.readlines()]
 
 # 选择处理的文件来源
-process_source = "scp_file"  # 可选值："verify_dir" 或 "scp_file"
+process_source = "verify_dir"  # 可选值："verify_dir" 或 "scp_file"
 
 
 def process_audio_files(f_path, cate, predict_audio_func):
@@ -61,26 +61,29 @@ def process_audio_files(f_path, cate, predict_audio_func):
     处理音频文件并进行预测，统计结果。
 
     参数:
-    - file_paths: 音频文件路径列表
+    - f_path: 单个音频文件路径
     - cate: 类别名称（例如 "1_wake" 或 "0_non_wake"）
     - predict_audio_func: 预测音频的函数，返回 (class_ids, probabilities)
 
     返回值:
     - prob: 模型的预测概率的列表
-    - correct_count: 正确预测的数量
-    - total_count: 总文件数量
     """
-    global results, correct_count, total_count
     if f_path.endswith(".wav"):
+        global results, correct_count, total_count
         total_count[cate] += 1
         c_ids, prob = predict_audio_func(f_path)
         results[cate].append((os.path.basename(f_path), prob))
+
+        # 检查预测是否正确，并更新正确预测计数
         if c_ids == 1 and cate == "1_wake":
             correct_count[cate] += 1
         elif c_ids == 0 and cate == "0_non_wake":
-            total_count[cate] += 1
-        return prob
+            correct_count[cate] += 1
 
+        return prob
+    else:
+        print(f"文件 {f_path} 不是 WAV 格式，将被忽略。")
+        return None
 
 
 # 遍历文件夹并预测
@@ -92,7 +95,7 @@ for category in categories:
             file_path = os.path.join(category_dir, file_name)
             # 规范化路径
             file_path = os.path.normpath(file_path)
-            assert file_path == os.path.abspath(file_path)  # 确保绝对路劲正确
+            assert file_path == os.path.abspath(file_path)  # 确保绝对路径正确
             # 计数
             probabilities = process_audio_files(file_path, category, predict_audio)
     elif category == "1_wake":
