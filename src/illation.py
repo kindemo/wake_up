@@ -1,38 +1,10 @@
 import tensorflow as tf
 import os
+from illation2 import predict_audio
 import numpy as np
 
 # 加载模型
 imported = tf.saved_model.load("D:\\PycharmProjects\\wark_by_voice\\saved")
-
-
-# 预测函数
-def predict_audio(file_path):
-    audio = tf.io.read_file(file_path)
-    audio, _ = tf.audio.decode_wav(audio, desired_channels=1, desired_samples=16000)
-    audio = tf.squeeze(audio, axis=-1)
-    audio = audio[tf.newaxis, :]  # 增加批次维度
-    predictions = imported(audio)
-
-    # 检查predictions的结构
-    # print("Predictions structure:", predictions)
-
-    # 提取预测结果
-    # class_ids = predictions['class_ids'].numpy()
-
-
-    # class_names = predictions['class_names'].numpy()
-    # class_names = [name.decode('utf-8') for name in class_names]
-    # print(class_names)
-    prediction_probabilities = predictions['predictions'].numpy()
-    class_ids = 1 if prediction_probabilities[0] > 0.5 else 0
-
-    # 检查输出的形状
-    # print("Class IDs shape:", class_ids.shape)
-    # print("Prediction probabilities shape:", prediction_probabilities.shape)
-
-    # 返回预测结果
-    return class_ids, prediction_probabilities
 
 
 # 遍历文件夹并预测
@@ -78,3 +50,32 @@ print(f"\nTotal Accuracy: {total_accuracy:.2f}")
 # plt.ylabel('Probability')
 # plt.title('Prediction Results')
 # plt.show()
+
+
+# # 预测函数
+# def predict_audio(file_path):
+#     audio = tf.io.read_file(file_path)
+#     audio, _ = tf.audio.decode_wav(audio, desired_channels=1, desired_samples=16000)
+#     audio = tf.squeeze(audio, axis=-1)
+#     audio = audio[tf.newaxis, :]  # 增加批次维度
+#     predictions = imported(audio)
+#
+#     # 检查predictions的结构
+#     # print("Predictions structure:", predictions)
+#
+#     # 提取预测结果
+#     # class_ids = predictions['class_ids'].numpy()
+#
+#
+#     # class_names = predictions['class_names'].numpy()
+#     # class_names = [name.decode('utf-8') for name in class_names]
+#     # print(class_names)
+#     prediction_probabilities = predictions['predictions'].numpy()
+#     class_ids = 1 if prediction_probabilities[0] > 0.5 else 0
+#
+#     # 检查输出的形状
+#     # print("Class IDs shape:", class_ids.shape)
+#     # print("Prediction probabilities shape:", prediction_probabilities.shape)
+#
+#     # 返回预测结果
+#     return class_ids, prediction_probabilities

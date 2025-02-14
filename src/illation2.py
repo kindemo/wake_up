@@ -17,22 +17,21 @@ def predict_audio(file_path):
     # 检查predictions的结构
     # print("Predictions structure:", predictions)
 
-    # 提取预测结果
-    # class_ids = predictions['class_ids'].numpy()
-
-
     # class_names = predictions['class_names'].numpy()
     # class_names = [name.decode('utf-8') for name in class_names]
     # print(class_names)
-    prediction_probabilities = predictions['predictions'].numpy()
-    class_ids = 1 if prediction_probabilities[0] > 0.5 else 0
+
+    class_ids = predictions['class_ids'].numpy()  # 提取预测结果
+    pred_probabilities = predictions['predictions'].numpy()
+
+    # class_ids = 1 if prediction_probabilities[0] > 0.5 else 0     # 无需
 
     # 检查输出的形状
     # print("Class IDs shape:", class_ids.shape)
     # print("Prediction probabilities shape:", prediction_probabilities.shape)
 
     # 返回预测结果
-    return class_ids, prediction_probabilities
+    return class_ids, pred_probabilities
 
 
 # 验证目录
@@ -42,6 +41,8 @@ categories = ["0_non_wake", "1_wake"]
 results = {"0_non_wake": [], "1_wake": []}
 correct_count = {"0_non_wake": 0, "1_wake": 0}
 total_count = {"0_non_wake": 0, "1_wake": 0}
+# 选择处理的文件来源
+process_source = "verify_dir"  # 可选值："verify_dir" 或 "scp_file"
 
 # SCP文件路径
 scp_file_path = "D:/PycharmProjects/wark_by_voice/we_train/dev/SPEECHDATA/dev.scp"
@@ -51,9 +52,6 @@ scp_files = []
 if os.path.exists(scp_file_path):
     with open(scp_file_path, 'r') as scp_file:
         scp_files = [line.strip() for line in scp_file.readlines()]
-
-# 选择处理的文件来源
-process_source = "verify_dir"  # 可选值："verify_dir" 或 "scp_file"
 
 
 def process_audio_files(f_path, cate, predict_audio_func):

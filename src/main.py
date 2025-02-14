@@ -13,6 +13,7 @@ from pydub import AudioSegment
 from tensorflow.keras import regularizers
 from func import *
 from draw import *
+from model_calss import *
 from absl import logging
 
 # 设置 absl 日志级别为 WARNING
@@ -138,12 +139,16 @@ print(f"Audio shape: {audio_shape}")
 print(f"Label shape: {label_shape}")
 
 # 取出频谱数据
-for example_spectrograms, example_spect_labels in train_spectrogram_ds.take(1):
+for e_g_spectrograms, example_spect_labels in train_spectrogram_ds.take(1):
     # example_audio.shape: (10, 16000)
-    print(f"example_spectrograms.shape: {example_spectrograms.shape}")
+    print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
     print(f"example_spect_labels.shape: {example_spect_labels.shape}")
     # 绘制前九张的频谱图
-    plot_spectrograms(example_spectrograms, example_spect_labels, label_names, rows=3, cols=3, figsize=(16, 9))
+    plot_spectrograms(e_g_spectrograms, example_spect_labels, label_names, rows=3, cols=3, figsize=(16, 9))
+
+    input_shape = e_g_spectrograms.shape[1:]
+    print('Input shape:', input_shape)
+    num_labels = len(label_names)
     break
 
 
@@ -151,10 +156,6 @@ for example_spectrograms, example_spect_labels in train_spectrogram_ds.take(1):
 train_spectrogram_ds = train_spectrogram_ds.cache().shuffle(4096).prefetch(tf.data.AUTOTUNE)
 val_spectrogram_ds = val_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
 test_spectrogram_ds = test_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
-
-input_shape = example_spectrograms.shape[1:]
-print('Input shape:', input_shape)
-num_labels = len(label_names)
 
 
 # 适应归一化层
@@ -177,30 +178,6 @@ l2_reg = regularizers.L2(l2=0.01)
 #     num_parallel_calls=tf.data.AUTOTUNE
 # )
 
-# 注意力机制
-class SelfAttention(layers.Layer):
-    def __init__(self, embed_dim, **kwargs):
-        super(SelfAttention, self).__init__(**kwargs)
-        self.embed_dim = embed_dim
-        self.query = layers.Dense(embed_dim)
-        self.key = layers.Dense(embed_dim)
-        self.value = layers.Dense(embed_dim)
-
-    def call(self, x):
-        q = self.query(x)
-        k = self.key(x)
-        v = self.value(x)
-        attn_weights = tf.matmul(q, k, transpose_b=True)
-        attn_weights = tf.nn.softmax(attn_weights, axis=-1)
-        attended_values = tf.matmul(attn_weights, v)
-        return attended_values
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "embed_dim": self.embed_dim
-        })
-        return config
 
 
 # 使用函数式 API 构建模型
@@ -219,7 +196,7 @@ x = residual_block(x, filters=32, kernel_size=3, stride=2, l2_reg=l2_reg)
 x = layers.MaxPooling2D()(x)
 x = layers.Dropout(0.3)(x)
 
-# --- 新增GRU层 ---
+# --- GRU层 ---
 # 将CNN输出的4D特征图转换为3D时序数据（假设时间步在高度维度）
 _, height, width, channels = x.shape  # 动态获取维度
 x = layers.Reshape((height, width * channels))(x)  # 转换为 (None, time_steps, features)
@@ -243,18 +220,9 @@ outputs = layers.Dense(1, activation='sigmoid')(x)
 model = models.Model(inputs=inputs, outputs=outputs)
 model.summary()
 
-# 加权二元交叉熵
-def weighted_binary_crossentropy(weights):
-    def loss(y_true, y_pred):
-        y_true = tf.cast(y_true, tf.float32)
-        y_pred = tf.cast(y_pred, tf.float32)
-        loss = -weights[0] * y_true * tf.math.log(y_pred + 1e-7) - weights[1] * (1 - y_true) * tf.math.log(1 - y_pred + 1e-7)
-        return tf.reduce_mean(loss)
-    return loss
 
-# 加权w使模型更加关注正类
+# 加权二元交叉熵w使模型更加关注正类
 w = [1.1, 1.0]
-
 
 # loss='binary_crossentropy',
 # Adam 优化器
@@ -264,45 +232,6 @@ model.compile(
     metrics=['accuracy'],
 )
 
-
-# 设置早停准确率和改善限度
-class CustomEarlyStopping(tf.keras.callbacks.Callback):
-    def __init__(self, patience=2, train_accuracy_threshold=0.8):
-        super(CustomEarlyStopping, self).__init__()
-        self.patience = patience
-        self.train_accuracy_threshold = train_accuracy_threshold
-        self.best_weights = None
-        self.best_weights_path = '../temp_weights/best_weights.h5'
-        self.best = None
-        self.wait = 0
-
-    def on_train_begin(self, logs=None):
-        self.wait = 0
-        self.best = float('inf')  # 假设监控的是损失，如果是准确率则初始化为 -inf
-
-    def on_epoch_end(self, epoch, logs=None):
-        # 获取验证集损失和训练集准确率
-        val_loss = logs.get('val_loss', float('inf'))   # 如果没有 val_loss，则使用一个很大的值
-        train_accuracy = logs.get('accuracy', 0.0)  # 或者是 'acc'，取决于你的模型定义
-
-        # 检查训练集准确率是否达到阈值
-        if train_accuracy < self.train_accuracy_threshold:
-            print(f"\t训练集准确率未达到 {self.train_accuracy_threshold * 100}%，继续训练...")
-            return
-
-        # 检查验证集损失是否改善
-        if val_loss < self.best:
-            self.best = val_loss
-            self.wait = 0
-            self.model.save_weights(self.best_weights_path)  # 保存权重到磁盘
-            # self.best_weights = self.model.get_weights()
-        else:
-            self.wait += 1
-            if self.wait >= self.patience:
-                self.model.stop_training = True
-                print(f"\t验证集损失在连续 {self.patience} 个轮次内没有改善，训练提前停止。")
-                # self.model.set_weights(self.best_weights)  # 恢复最佳权重
-                self.model.load_weights(self.best_weights_path)  # 从磁盘加载权重
 
 # 使用自定义回调函数
 EPOCHS = 10
@@ -377,38 +306,6 @@ display.display(display.Audio(waveform, rate=16000))
 
 
 
-#导出模型
-class ExportModel(tf.Module):
-  def __init__(self, model):
-    self.model = model
-
-    # Accept either a string-filename or a batch of waveforms.
-    # YOu could add additional signatures for a single wave, or a ragged-batch.
-    self.__call__.get_concrete_function(
-        x=tf.TensorSpec(shape=(), dtype=tf.string))
-    self.__call__.get_concrete_function(
-       x=tf.TensorSpec(shape=[None, 16000], dtype=tf.float32))
-
-
-  @tf.function
-  def __call__(self, x):
-    # If they pass a string, load the file and decode it.
-    if x.dtype == tf.string:
-      x = tf.io.read_file(x)
-      x, _ = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000,)
-      x = tf.squeeze(x, axis=-1)
-      x = x[tf.newaxis, :]
-
-    # 获取频谱
-    x = get_spectrogram(x)
-    result = self.model(x, training=False)
-
-    # 获取预测结果中概率最高的索引
-    class_ids = tf.argmax(result, axis=-1)
-    class_names = tf.gather(label_names, class_ids)
-    return {'predictions':result,
-            'class_ids': class_ids,
-            'class_names': class_names}
 
 
 export = ExportModel(model)
