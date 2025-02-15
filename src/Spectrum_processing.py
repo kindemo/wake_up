@@ -16,6 +16,44 @@ def squeeze(audio, labels):
     # print(f'通道后：{audio.shape}')
     return audio, labels
 
+import tensorflow as tf
+
+def get_mfcc(waveform, n_mfcc=13, frame_length=255, frame_step=128, fft_length=256, num_mel_bins=40, lower_frequency=20, upper_frequency=4000):
+    # shape (时间步长, n_mfcc, 1)
+    # 计算STFT
+    stft = tf.signal.stft(
+        waveform,
+        frame_length=frame_length,
+        frame_step=frame_step,
+        fft_length=fft_length
+    )
+    spectrogram = tf.abs(stft)
+
+    # 创建梅尔滤波器组
+    mel_filterbank = tf.signal.linear_to_mel_weight_matrix(
+        num_mel_bins=num_mel_bins,
+        num_spectrogram_bins=spectrogram.shape[-1],
+        sample_rate=16000,
+        lower_edge_hertz=lower_frequency,
+        upper_edge_hertz=upper_frequency
+    )
+
+    # 应用梅尔滤波器组
+    mel_spectrogram = tf.tensordot(spectrogram, mel_filterbank, 1)
+    mel_spectrogram.set_shape(spectrogram.shape[:-1].concatenate(mel_filterbank.shape[-1:]))
+
+    # 取对数
+    log_mel_spectrogram = tf.math.log(mel_spectrogram + 1e-6)
+
+    # 计算MFCC
+    mfccs = tf.signal.dct(log_mel_spectrogram, type=2, axis=-1, norm='ortho')
+    mfccs = mfccs[..., :n_mfcc]  # 取前n_mfcc个系数
+
+    # 添加通道维度
+    mfccs = mfccs[..., tf.newaxis]
+
+    return mfccs
+
 
 # 将音频波形转换为频谱图，通过短时傅里叶变换（STFT）计算频谱图，并取其绝对值，然后添加一个通道维度，使其可以作为卷积层的输入
 def get_spectrogram(waveform):
@@ -26,10 +64,17 @@ def get_spectrogram(waveform):
     # spectrogram = tf.image.resize(spectrogram, (128, 128))  # 统一频谱图的形状
     return spectrogram
 
-# 从音频数据集创建频谱图数据集
+# # 从音频数据集创建频谱图(对数)数据集
+# def make_spec_ds(ds):
+#     return ds.map(
+#         map_func=lambda audio, label: (get_spectrogram(audio), label),
+#         num_parallel_calls=tf.data.AUTOTUNE
+#     )
+
+# 从音频数据集创建Mel频谱图数据集
 def make_spec_ds(ds):
     return ds.map(
-        map_func=lambda audio, label: (get_spectrogram(audio), label),
+        map_func=lambda audio, label: (get_mfcc(audio), label),
         num_parallel_calls=tf.data.AUTOTUNE
     )
 
@@ -50,7 +95,8 @@ def plot_spectrogram(spectrogram, ax):
         spectrogram = np.squeeze(spectrogram, axis=-1)  # 去掉多余的轴
 
     # 计算对数频谱图
-    log_spec = np.log(spectrogram.T + np.finfo(float).eps)
+    # log_spec = np.log(spectrogram.T + np.finfo(float).eps)
+    log_spec = spectrogram.T        # Mel
 
     # 获取频谱图的尺寸
     height, width = log_spec.shape
@@ -69,34 +115,3 @@ def plot_spectrogram(spectrogram, ax):
 
 
 
-# 手动实现残差块
-def residual_block(x, filters, kernel_size=3, stride=1, l2_reg=None):
-    """
-    手动实现一个残差块。
-    :param x: 输入张量
-    :param filters: 卷积核数量
-    :param kernel_size: 卷积核大小
-    :param stride: 卷积步长
-    :param l2_reg: L2正则化
-    :return: 输出张量
-    """
-    # 主路径
-    conv1 = layers.Conv2D(filters, kernel_size, strides=stride, padding='same', kernel_regularizer=l2_reg)(x)
-    conv1 = layers.BatchNormalization()(conv1)
-    conv1 = layers.Activation('relu')(conv1)
-
-    conv2 = layers.Conv2D(filters, kernel_size, padding='same', kernel_regularizer=l2_reg)(conv1)
-    conv2 = layers.BatchNormalization()(conv2)
-
-    # 跳跃连接
-    if stride > 1 or x.shape[-1] != filters:  # 如果步长>1或输入输出通道不一致
-        shortcut = layers.Conv2D(filters, 1, strides=stride, padding='same', kernel_regularizer=l2_reg)(x)
-        shortcut = layers.BatchNormalization()(shortcut)
-    else:
-        shortcut = x
-
-    # 将主路径和跳跃连接相加
-    output = layers.Add()([conv2, shortcut])
-    output = layers.Activation('relu')(output)
-
-    return output

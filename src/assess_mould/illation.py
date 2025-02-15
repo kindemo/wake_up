@@ -1,14 +1,13 @@
 import tensorflow as tf
 import os
-from illation2 import predict_audio
-import numpy as np
+from src.assess_mould.illation2 import predict_audio
 
 # 加载模型
-imported = tf.saved_model.load("D:\\PycharmProjects\\wark_by_voice\\saved")
+imported = tf.saved_model.load("/saved")
 
 
 # 遍历文件夹并预测
-verify_dir = "D:\\PycharmProjects\\wark_by_voice\\verify"
+verify_dir = "/verify"
 categories = ["0_non_wake", "1_wake"]
 results = {"0_non_wake": [], "1_wake": []}
 correct_count = {"0_non_wake": 0, "1_wake": 0}

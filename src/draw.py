@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from func import plot_spectrogram
+from Spectrum_processing import plot_spectrogram
 import numpy as np
 
 def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize=(16, 9)):

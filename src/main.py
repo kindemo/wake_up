@@ -11,7 +11,7 @@ from tensorflow.keras import layers, models,Input
 from tensorflow.keras.regularizers import l2
 from pydub import AudioSegment
 from tensorflow.keras import regularizers
-from func import *
+from Spectrum_processing import *
 from draw import *
 from model_calss import *
 from absl import logging
@@ -70,7 +70,7 @@ print('Commands:', commands)
 # 从数据文件夹中加载音频数据集，分为训练集和验证集，设置了批量大小、验证集比例、随机种子、输出序列长度等参数
 train_ds, val_ds = tf.keras.utils.audio_dataset_from_directory(
     directory=data_dir,
-    batch_size=128,      # 每次从数据集中取出 128 个音频样本进行训练或验证
+    batch_size=256,      # 每次从数据集中取出 128 个音频样本进行训练或验证
     validation_split=0.2,   # 从整个数据集中随机选取 20% 的数据作为验证集，剩余 80% 的数据作为训练集
     seed=0,
     output_sequence_length=16000,
@@ -163,7 +163,7 @@ norm_layer = layers.Normalization()
 norm_layer.adapt(data=train_spectrogram_ds.map(map_func=lambda spec, label: spec))
 
 # 定义全局正则化器
-l2_reg = regularizers.L2(l2=0.01)
+l2_reg = regularizers.L2(l2=0.035)
 
 # # 创建数据增强管道
 # data_augmentation = tf.keras.Sequential([
@@ -182,16 +182,17 @@ l2_reg = regularizers.L2(l2=0.01)
 
 # 使用函数式 API 构建模型
 inputs = Input(shape=input_shape)
-x = layers.Resizing(128, 128)(inputs)  # 如果输入数据的原始尺寸较小，可以跳过这一步
-x = layers.BatchNormalization()(x)
+
+# x = layers.Resizing(128, 128)(inputs)  # 如果输入数据的原始尺寸较小，可以跳过这一步
+x = layers.BatchNormalization()(inputs)
 x = layers.Conv2D(16, 3, kernel_regularizer=l2_reg)(x)
 x = layers.Dropout(0.3)(x)
 x = layers.BatchNormalization()(x)
 x = layers.Activation('relu')(x)
 
 # 残差块
-x = residual_block(x, filters=16, kernel_size=3, stride=1, l2_reg=l2_reg)
-x = residual_block(x, filters=32, kernel_size=3, stride=2, l2_reg=l2_reg)
+x = residual_block(x, filters=8, kernel_size=3, stride=1, l2_reg=l2_reg)
+x = residual_block(x, filters=16, kernel_size=3, stride=2, l2_reg=l2_reg)
 
 x = layers.MaxPooling2D()(x)
 x = layers.Dropout(0.3)(x)
@@ -201,7 +202,8 @@ x = layers.Dropout(0.3)(x)
 _, height, width, channels = x.shape  # 动态获取维度
 x = layers.Reshape((height, width * channels))(x)  # 转换为 (None, time_steps, features)
 # x = layers.GRU(16, return_sequences=False, kernel_regularizer=l2_reg)(x)  # GRU输出最后一步
-x = layers.GRU(32, return_sequences=True, kernel_regularizer=l2_reg)(x)  # GRU输出所有时间步
+x = layers.GRU(20, return_sequences=True, kernel_regularizer=l2_reg)(x)  # GRU输出所有时间步
+x = layers.Dropout(0.3)(x)  # 新增 Dropout
 
 # --- 调用注意力机制 ---
 attention = SelfAttention(embed_dim=16)  # 假设注意力机制的嵌入维度为8
@@ -222,7 +224,7 @@ model.summary()
 
 
 # 加权二元交叉熵w使模型更加关注正类
-w = [1.1, 1.0]
+w = [1.08, 1.0]
 
 # loss='binary_crossentropy',
 # Adam 优化器
@@ -234,7 +236,7 @@ model.compile(
 
 
 # 使用自定义回调函数
-EPOCHS = 10
+EPOCHS = 20
 # callbacks：回调函数，当验证集上的损失在连续 2 个轮数内没有改善时，提前停止训练。
 callbacks = [
     CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
@@ -258,7 +260,6 @@ plot_training_history(history, figsize=(16, 6))
 
 
 # 绘制混淆矩阵
-
 model.evaluate(test_spectrogram_ds, return_dict=True)
 y_pred = model.predict(test_spectrogram_ds)
 # y_pred = tf.argmax(y_pred, axis=1)    # 多分类时用
@@ -278,31 +279,32 @@ plt.xlabel('Prediction')
 plt.ylabel('Label')
 plt.show()
 
-# 小验证
-x = 'D:\\PycharmProjects\\wark_by_voice\\verify\\1_wake\\c_ya_fast_2_10_1_quiet.wav'
-
-# 将输入转换为16bit的音频
-convert_to_16bit_wav(x, x)
-
-x = tf.io.read_file(str(x))
-x, sample_rate = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000,)
-x = tf.squeeze(x, axis=-1)
-waveform = x
-x = get_spectrogram(x)
-x = x[tf.newaxis,...]   # 转化为批次的形式
-
-prediction = model(x)
-print("prediction:", prediction)
-
-x_labels = ['wake_words_probability']
-wake_word_probability = prediction.numpy()[0][0]  # 提取概率值
-plt.bar(x_labels, [wake_word_probability])
-
-plt.title('miya')
-plt.ylabel('Probability')
-plt.show()
-
-display.display(display.Audio(waveform, rate=16000))
+# # 小验证
+# x = 'D:\\PycharmProjects\\wark_by_voice\\verify\\1_wake\\c_ya_fast_2_10_1_quiet.wav'
+#
+# # 将输入转换为16bit的音频
+# convert_to_16bit_wav(x, x)
+#
+# x = tf.io.read_file(str(x))
+# x, sample_rate = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000,)
+# x = tf.squeeze(x, axis=-1)
+# waveform = x
+# # x = get_spectrogram(x)      # 利用对数频谱图
+# x = get_mfcc(x)     # 利用mfcc特征图
+# x = x[tf.newaxis,...]   # 转化为批次的形式
+#
+# prediction = model(x)
+# print("prediction:", prediction)
+#
+# x_labels = ['wake_words_probability']
+# wake_word_probability = prediction.numpy()[0][0]  # 提取概率值
+# plt.bar(x_labels, [wake_word_probability])
+#
+# plt.title('miya')
+# plt.ylabel('Probability')
+# plt.show()
+#
+# display.display(display.Audio(waveform, rate=16000))
 
 
 

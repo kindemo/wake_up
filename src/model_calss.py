@@ -1,6 +1,41 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from func import get_spectrogram
+from Spectrum_processing import get_spectrogram, get_mfcc
+import numpy as np
+
+# 手动实现残差块
+def residual_block(x, filters, kernel_size=3, stride=1, l2_reg=None):
+    """
+    手动实现一个残差块。
+    :param x: 输入张量
+    :param filters: 卷积核数量
+    :param kernel_size: 卷积核大小
+    :param stride: 卷积步长
+    :param l2_reg: L2正则化
+    :return: 输出张量
+    """
+    # 主路径
+    conv1 = layers.Conv2D(filters, kernel_size, strides=stride, padding='same', kernel_regularizer=l2_reg)(x)
+    conv1 = layers.BatchNormalization()(conv1)
+    conv1 = layers.Activation('relu')(conv1)
+
+    conv2 = layers.Conv2D(filters, kernel_size, padding='same', kernel_regularizer=l2_reg)(conv1)
+    conv2 = layers.BatchNormalization()(conv2)
+
+    # 跳跃连接
+    if stride > 1 or x.shape[-1] != filters:  # 如果步长>1或输入输出通道不一致
+        shortcut = layers.Conv2D(filters, 1, strides=stride, padding='same', kernel_regularizer=l2_reg)(x)
+        shortcut = layers.BatchNormalization()(shortcut)
+    else:
+        shortcut = x
+
+    # 将主路径和跳跃连接相加
+    output = layers.Add()([conv2, shortcut])
+    output = layers.Activation('relu')(output)
+
+    return output
+
+
 # 设置早停准确率和改善限度
 class CustomEarlyStopping(tf.keras.callbacks.Callback):
     def __init__(self, patience=2, train_accuracy_threshold=0.8):
@@ -75,49 +110,76 @@ def weighted_binary_crossentropy(weights):
     return loss
 
 
-#导出模型
 class ExportModel(tf.Module):
-  def __init__(self, model):
-    self.model = model
+    def __init__(self, model):
+        self.model = model
 
-    # Accept either a string-filename or a batch of waveforms.
-    # YOu could add additional signatures for a single wave, or a ragged-batch.
-    self.__call__.get_concrete_function(
-        x=tf.TensorSpec(shape=(), dtype=tf.string))
-    self.__call__.get_concrete_function(
-       x=tf.TensorSpec(shape=[None, 16000], dtype=tf.float32))
+        # 注册方法的签名
+        self.__call__.get_concrete_function(
+            x=tf.TensorSpec(shape=(), dtype=tf.string))
+        self.__call__.get_concrete_function(
+            x=tf.TensorSpec(shape=[None, 16000], dtype=tf.float32))
+
+    @tf.function
+    def calculate_average_db(self, audio_data):
+        """
+        计算音频数据的分贝值（dB）。
+
+        参数：
+        audio_data (tf.Tensor): 形状为 (None, 16000) 的音频张量。
+
+        返回：
+        tf.Tensor: 每个样本的分贝值数组 (N,)
+        """
+        rms = tf.sqrt(tf.reduce_mean(audio_data ** 2, axis=1))
+        db = tf.where(rms > 0, 20 * tf.math.log(rms) / tf.math.log(10.0), -np.inf)
+        return db
+
+    @tf.function
+    def __call__(self, x):
+        # 如果输入是字符串（文件路径），则加载并解码音频
+        if x.dtype == tf.string:
+            x = tf.io.read_file(x)
+            x, _ = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000)
+            x = tf.squeeze(x, axis=-1)
+            x = x[tf.newaxis, :]  # 增加批次维度
+
+        # 如果输入已经是音频张量，但缺少批次维度，增加批次维度
+        if len(x.shape) == 1:
+            x = x[tf.newaxis, :]
+
+        # 计算音频的分贝值
+        x_wave_db = self.calculate_average_db(x)
+
+        # 获取频谱图
+        # x_spectrogram = get_spectrogram(x)
+        x_spectrogram = get_mfcc(x)
+        print("x_spectrogram.shape:", x_spectrogram.shape)
+
+        # 获取预测结果中概率最高的索引(多分类）
+        # class_ids = tf.argmax(result, axis=-1)
+        # class_names = tf.gather(label_names, class_ids)
+
+        # 模型预测
+        result = self.model(x_spectrogram, training=False)
+        result = tf.squeeze(result, axis=-1)  # 转换为一维张量
+
+        # 设置阈值并判断类别
+        threshold = 0.5
+        m_db = -28
+        class_ids = tf.cast(result > threshold, dtype=tf.int32)
+
+        # 如果分贝值大于 -25dB，则将类别 ID 设置为 0
+        class_ids = tf.where(x_wave_db > m_db, 0, class_ids)
+
+        # 假设类别名称为 ["negative", "positive"]
+        # label_names = tf.constant(["Non_wake_up", "wake_up"])
+        # 获取预测类别名称
+        # class_names = tf.gather(label_names, class_ids)
+
+        return {'predictions': result, 'class_ids': class_ids}
 
 
-  @tf.function
-  def __call__(self, x):
-    # If they pass a string, load the file and decode it.
-    if x.dtype == tf.string:
-      x = tf.io.read_file(x)
-      x, _ = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000,)
-      x = tf.squeeze(x, axis=-1)
-      x = x[tf.newaxis, :]
-
-    # 获取频谱
-    x = get_spectrogram(x)
-    result = self.model(x, training=False)
-    result = tf.squeeze(result, axis=-1)    # 转换为一维张量
-
-    # 获取预测结果中概率最高的索引(多分类）
-    # class_ids = tf.argmax(result, axis=-1)
-    # class_names = tf.gather(label_names, class_ids)
-
-    # 设置阈值
-    threshold = 0.5
-    # 根据阈值判断类别
-    class_ids = tf.cast(result > threshold, dtype=tf.int32)
-
-    # 假设类别名称为 ["negative", "positive"]
-    # label_names = tf.constant(["Non_wake_up", "wake_up"])
-    # 获取预测类别名称
-    # class_names = tf.gather(label_names, class_ids)
-
-    return {'predictions': result,
-              'class_ids': class_ids}
 
 # 无需返回
 # return {'predictions':result,

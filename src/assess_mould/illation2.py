@@ -1,13 +1,17 @@
+from pathlib import Path
+
 import tensorflow as tf
 import os
 import numpy as np
+from exceptiongroup import catch
 
 # 加载模型
-imported = tf.saved_model.load("D:\\PycharmProjects\\wark_by_voice\\saved")
+base_path = Path("D:\PycharmProjects\wark_by_voice")
+imported = tf.saved_model.load(base_path / "saved")
 
-
-# 预测函数
+# 预测函数（直接从模型提出输出概率）
 def predict_audio(file_path):
+    # 将路径转换为张量形式 (None, 16000)
     audio = tf.io.read_file(file_path)
     audio, _ = tf.audio.decode_wav(audio, desired_channels=1, desired_samples=16000)
     audio = tf.squeeze(audio, axis=-1)
@@ -24,7 +28,6 @@ def predict_audio(file_path):
     class_ids = predictions['class_ids'].numpy()  # 提取预测结果
     pred_probabilities = predictions['predictions'].numpy()
 
-    # class_ids = 1 if prediction_probabilities[0] > 0.5 else 0     # 无需
 
     # 检查输出的形状
     # print("Class IDs shape:", class_ids.shape)
@@ -35,8 +38,8 @@ def predict_audio(file_path):
 
 
 # 验证目录
-verify_dir = "D:\\PycharmProjects\\wark_by_voice\\verify"
-scp_dir = "D:/PycharmProjects/wark_by_voice/we_train/dev/SPEECHDATA"
+verify_dir = base_path / "verify"
+scp_dir = base_path / "we_train/dev/SPEECHDATA"
 categories = ["0_non_wake", "1_wake"]
 results = {"0_non_wake": [], "1_wake": []}
 correct_count = {"0_non_wake": 0, "1_wake": 0}
@@ -45,8 +48,10 @@ total_count = {"0_non_wake": 0, "1_wake": 0}
 process_source = "verify_dir"  # 可选值："verify_dir" 或 "scp_file"
 
 # SCP文件路径
-scp_file_path = "D:/PycharmProjects/wark_by_voice/we_train/dev/SPEECHDATA/dev.scp"
+scp_file_path = base_path / "we_train/dev/SPEECHDATA/dev.scp"
 scp_files = []
+too_quiet_true = []
+too_quiet_false = []
 
 # 读取SCP文件中的路径
 if os.path.exists(scp_file_path):
@@ -60,7 +65,7 @@ def process_audio_files(f_path, cate, predict_audio_func):
 
     参数:
     - f_path: 单个音频文件路径
-    - cate: 类别名称（例如 "1_wake" 或 "0_non_wake"）
+    - cate: 真实的类别名称（例如 "1_wake" 或 "0_non_wake"）
     - predict_audio_func: 预测音频的函数，返回 (class_ids, probabilities)
 
     返回值:
@@ -78,6 +83,11 @@ def process_audio_files(f_path, cate, predict_audio_func):
         elif c_ids == 0 and cate == "0_non_wake":
             correct_count[cate] += 1
 
+        if c_ids == 0 and prob > 0.5:
+            if cate == "0_non_wake":
+                too_quiet_false.append(os.path.basename(f_path))
+            elif cate == "1_wake":
+                too_quiet_true.append(os.path.basename(f_path))
         return prob
     else:
         print(f"文件 {f_path} 不是 WAV 格式，将被忽略。")
@@ -93,7 +103,12 @@ for category in categories:
             file_path = os.path.join(category_dir, file_name)
             # 规范化路径
             file_path = os.path.normpath(file_path)
-            assert file_path == os.path.abspath(file_path)  # 确保绝对路径正确
+            try:
+                assert file_path == os.path.abspath(file_path)  # 确保绝对路径正确
+            except Exception as e:
+                print(e)
+                print(file_path)
+                print(os.path.abspath(file_path))
             # 计数
             probabilities = process_audio_files(file_path, category, predict_audio)
     elif category == "1_wake":
@@ -127,6 +142,10 @@ for cate in categories:
 for cate in categories:
     accuracy = correct_count[cate] / total_count[cate] if total_count[cate] > 0 else 0
     print(f"\nCategory: {cate}, Accuracy: {accuracy:.2f}")
+
+print()
+print(f'共{len(too_quiet_true)}个本来是唤醒词因为太小声而被认为是非唤醒词{too_quiet_true}')
+print(f'共{len(too_quiet_false)}个非唤醒词因为声音太小而被丢弃{too_quiet_false}')
 
 # 计算总分类正确率
 total_correct = correct_count["0_non_wake"] + correct_count["1_wake"]
