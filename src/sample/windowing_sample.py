@@ -2,14 +2,61 @@ import numpy as np
 import librosa
 import matplotlib.pyplot as plt
 
-def enframe(signal, frame_len, frame_shift, win_func=np.hamming):
+import numpy as np
+
+def get_windows(waveform, frame_length=400, frame_step=160, num_windows=10):
+    """
+    将音频信号分帧并按滑动窗口拼接为窗。
+    如果最后一个窗不足指定数量的帧，则填充为0。
+
+    参数:
+        waveform: 输入的音频信号（1D numpy数组）。
+        frame_length: 每个帧的样本数。
+        frame_step: 每个帧的步长。
+        num_windows: 每个拼接窗的帧数。
+
+    返回:
+        输出的shape为（帧长 400, 窗大小 10, 窗数量 None）。
+    """
+    # 分帧
+    frames = []
+    start = 0
+    while start + frame_length <= len(waveform):
+        frame = waveform[start:start + frame_length]
+        frames.append(frame)
+        start += frame_step
+
+    # 如果最后一个帧不足 frame_length，填充为0
+    if start < len(waveform):
+        remaining = waveform[start:]
+        padded_remaining = np.pad(remaining, (0, frame_length - len(remaining)), mode='constant')
+        frames.append(padded_remaining)
+
+    # 将帧按滑动窗口拼接为窗
+    windows = []
+    for i in range(len(frames) - num_windows + 1):
+        window = frames[i:i + num_windows]
+        windows.append(np.stack(window, axis=0))  # 将窗内的帧堆叠起来
+
+    # 如果最后一个窗不足 num_windows 个帧，填充为0
+    if len(frames) % num_windows != 0:
+        last_window = frames[-num_windows:]
+        padded_last_window = np.pad(last_window, ((0, num_windows - len(last_window)), (0, 0)), mode='constant')
+        windows.append(padded_last_window)
+
+    # 转换为 NumPy 数组并调整形状
+    concatenated_windows = np.stack(windows, axis=-1)  # (帧长, 窗大小, 窗数量)
+    return concatenated_windows
+
+
+def enframe(signal, frame_len=400, frame_shift=160, win_func=np.hamming):
     """
     分帧并加窗（末尾不足一帧直接丢弃）
-    :param signal: 输入音频信号
+    :param signal: 输入音频信号 (wave)
     :param frame_len: 帧长（采样点数）
     :param frame_shift: 帧移（采样点数）
     :param win_func: 窗函数，默认为汉明窗
-    :return: 分帧并加窗后的信号
+    :return: 分帧并加窗后的信号 (num_frames, 400)
     """
     num_samples = len(signal)
     if num_samples < frame_len:
@@ -26,7 +73,7 @@ def enframe(signal, frame_len, frame_shift, win_func=np.hamming):
 
 
 # 示例：加载音频
-audio_path = '../verify/0_non_wake/0001_M02_01_fast_0009.wav'
+audio_path = '../../verify/0_non_wake/0001_M02_01_fast_0009.wav'
 y, sr = librosa.load(audio_path, sr=16000)
 
 # 设置参数

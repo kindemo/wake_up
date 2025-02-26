@@ -1,12 +1,22 @@
-import wave
 import numpy as np
-from tensorflow import squeeze
-import numpy as np
+import tensorflow as tf
 
 
-import numpy as np
+# 用于删除音频数据的额外轴，因为音频数据只包含单声道
+def squeeze(audio, labels):
+    # print(f'通道前：{audio.shape}')
+    # 如果音频是双声道，取平均值转换为单声道
+    # 检查是否为双声道或多声道
+    if len(audio.shape) > 2 and audio.shape[-1] is None:  # 如果有多个通道
+        audio = tf.reduce_mean(audio, axis=-1)  # 对通道取平均值
+    # 删除最后一个维度
+    if len(audio.shape) > 2 and audio.shape[-1] == 1:
+        audio = tf.squeeze(audio, axis=-1)
+    # print(f'通道后：{audio.shape}')
+    return audio, labels
 
 
+# 计算音频平均分贝
 def calculate_average_db(audio_data):
     """
     计算音频数据的分贝值（dB）。
@@ -34,7 +44,6 @@ def calculate_average_db(audio_data):
     db[rms == 0] = -np.inf  # RMS 为零时，分贝值为负无穷
 
     return db
-
 
 # def is_wake_word(wav_file_path, threshold_db=-40):
 #     """

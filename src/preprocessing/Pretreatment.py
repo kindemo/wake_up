@@ -1,0 +1,197 @@
+import unittest
+import warnings
+from math import floor
+from unittest.mock import patch
+
+import scipy.io.wavfile as wavfile
+import tensorflow as tf
+
+from src.preprocessing.Spectrum_processing import get_mfcc
+from src.preprocessing.del_signal import del_signal_ini
+from src.preprocessing.windowing import get_windows
+
+
+def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
+    """
+    分割成通道的核心调用代码
+    :param wave: 波形数据需要是TensorFlow 张量
+    :param s_rate:
+    :param frame_length:
+    :param n_mfcc:
+    :param num_win:
+    :return: 返回形状为 (num_channels, 26, 13) 的张量。
+    """
+
+    try:
+        # 假设 wave 是一个 TensorFlow 张量
+        # 将音频数据转换为 tf.float32 类型
+        wave = tf.cast(wave, dtype=tf.float32)
+        s_rate = tf.cast(s_rate, dtype=tf.float32)
+
+        # 调用降噪和端点检测函数
+        waveform = del_signal_ini(s_rate, wave)  # 降噪端点检测
+    except Exception as e:
+        print(f"Error deleting audio file: {e}")
+        waveform = tf.zeros(16000, dtype=tf.float32)
+
+    try:
+        # 进行无重叠拼帧
+        windows = get_windows(waveform, frame_length, num_windows=num_win)
+    except Exception as e:
+        print(f"Error getting windows: {e}")
+        windows = tf.zeros([11, 400, 1], dtype=tf.float32)
+
+    try:
+        # 提取特征获取帧的多通道，假设返回形状为(num_channels, num_windows, n_mfcc)
+        channels = get_mfcc(windows, num_windows=num_win)
+
+        # 检查 channels 的形状是否正确
+        if len(channels.shape) != 3 or channels.shape[-1] != n_mfcc:
+            raise ValueError(
+                f"MFCC features shape is incorrect. Expected (num_channels, num_windows, {n_mfcc}), "
+                f"got {channels.shape}")
+
+        return tf.convert_to_tensor(channels, dtype=tf.float32)
+    except Exception as e:
+        print(f"Error getting MFCC features: {e}")
+        sum_mfcc_frames = tf.cast(tf.floor((frame_length * num_win - frame_length) / 160) + 1, tf.int64)
+        return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
+
+
+def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):
+    """
+    输入： 文件路径
+    按照默认参数会被划分为(400*11-400)+1=26个帧
+    将音频张量划分为多个通道，每个通道的形状为 (26, 13)。
+    返回形状为 (num_channels, 26, 13) 的张量。
+    """
+    try:
+        file_path = file_path.decode("utf-8")  # 使用 UTF-8 编码解码
+        # 加载音频文件
+        warnings.filterwarnings("ignore", category=wavfile.WavFileWarning)  # 忽略元数据无法读取的警告
+
+        # 用tensorflow自带的库
+        audio_binary = tf.io.read_file(file_path)
+        wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
+        # 将音频数据转换为 tf.float32 类型
+        wave = tf.cast(wave, dtype=tf.float32)
+        wave = tf.squeeze(wave, axis=-1)
+        s_rate = tf.cast(s_rate, dtype=tf.float32)
+        return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
+    except Exception as e:
+        print(f"Error loading audio file to channels: {e}")
+        sum_mfcc_frames = int(tf.floor((frame_length * num_win - frame_length) / 160)) + 1
+        return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
+
+
+def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=11):
+    """
+    加载音频文件并划分通道，返回通道和标签。
+    """
+    sum_mfcc_frames = floor((frame_length * num_win - frame_length) / 160) + 1
+
+    def py_load_and_split_audio(file_path_str, label_py):
+        try:
+            channels = loading_file2channels(file_path_str, frame_length, n_mfcc, num_win)
+            # ！此处不能扩展维度
+            num_channels = channels.shape[0]
+            labels = tf.repeat(label_py, num_channels)
+            # print(f"channels shape: {channels.shape}, labels: {labels}")
+            return channels, labels
+        except Exception as e:
+            print(f"Error processing file when tf.function{file_path_str}: {e}")
+            return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32), tf.zeros(1, dtype=tf.int32)
+
+    channels, labels = tf.numpy_function(
+        py_load_and_split_audio,
+        [file_path, label],
+        [tf.float32, tf.int32]
+    )
+    channels.set_shape([None, sum_mfcc_frames, n_mfcc])
+    labels.set_shape([None])
+    return channels, labels
+
+
+def preprocess_dataset(file_paths: list[str], labels: list[str], frame_length=400, n_mfcc=13, num_win=11):
+    """
+    预处理数据集，加载并划分音频文件。
+    返回: 数据集
+    """
+    # 创建初始 Dataset
+    dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))
+
+    # 应用 load_and_split_audio 函数
+    dataset = dataset.flat_map(lambda file_path, label:
+                               tf.data.Dataset.from_tensor_slices(
+                                   load_and_split_audio(file_path, label, frame_length, n_mfcc, num_win)
+                               )
+                               )
+    return dataset, labels
+
+
+class TestLoadAndSplitAudio(unittest.TestCase):
+    @patch(__name__ + '.split_audio_channels')
+    def test_load_and_split_audio(self, mock_split_audio_channels):
+        # 模拟 split_audio_channels 函数的返回值
+        mock_channels = tf.random.normal([31, 26, 13])
+        mock_split_audio_channels.return_value = mock_channels
+
+        # 定义测试输入
+
+        file_path = "D:/PycharmProjects/wark_by_voice/verify/0_non_wake/1森林－昆虫－mcx20070416.wav"
+        label = tf.constant(0, dtype=tf.int32)
+
+        # 调用被测试函数
+        channels, labels = load_and_split_audio(file_path, label)
+
+        # 检查输出类型
+        self.assertEqual(channels.dtype, tf.float32)
+        self.assertEqual(labels.dtype, tf.int32)
+
+        # 检查输出形状
+        self.assertEqual(len(channels.shape), 3)
+        self.assertEqual(len(labels.shape), 1)
+        self.assertEqual(labels.shape[0], channels.shape[0])
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+
+
+
+
+
+
+
+# 扩展为四维数据，应用于每个样本的特征部分（x），而标签部分（y）保持不变。
+# dataset = dataset.map(lambda x, y: (tf.expand_dims(x, axis=-1), y))  # 在最后一个维度扩展
+
+# # 绘制音频波形图和频谱图的函数
+# plot_waveform_and_spectrogram(waveform, spectrogram, label, figsize=(12, 8))
+
+
+# # 取出波形数据
+# for example_audio, example_labels in train_ds.take(1):
+#     print(f"example_audio.shape: {example_audio.shape}")
+#     print(f"example_labels.shape: {example_labels.shape}")
+#     # 绘制取出的前九个音频波形
+#     plot_audio_waveforms(example_audio, example_labels, label_names, rows=3, cols=3, figsize=(16, 10))
+#     break
+
+
+# # 打印转换后的效果（各向量维度）
+# for i in range(3):
+#     # 标签：label_names[example_labels[0]]
+#     # 波形：example_audio[0]
+#     # 频谱图：get_spectrogram(example_audio[0])
+#     label = label_names[example_labels[i]]
+#     waveform = example_audio[i]
+#     spectrogram = get_spectrogram(waveform)
+#
+#     print('Label:', label)
+#     print('Waveform shape:', waveform.shape)
+#     print('Spectrogram shape:', spectrogram.shape)
+#     print('Audio playback\n')
+#     display.display(display.Audio(waveform, rate=16000))

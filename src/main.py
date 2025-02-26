@@ -1,44 +1,39 @@
-import os
-import pathlib
+from pathlib import Path
 
-import numpy as np
+from src.preprocessing.data_preprocessing import normalize_data, preprocess_data
+from src.model.model_builder import CustomModel
+from src.model.model_trainer import compile_model, train_model
+from src.model.utils import CustomEarlyStopping
 import seaborn as sns
-import tensorflow as tf
 
-from IPython import display
-from keras.layers import BatchNormalization
-from tensorflow.keras import layers, models,Input
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras import layers
+
 from pydub import AudioSegment
-from tensorflow.keras import regularizers
-from Spectrum_processing import *
+
+import gc
 from draw import *
-from model_calss import *
-from absl import logging
+from src.model.export_model import *
+from src.preprocessing.Pretreatment import *
+from data_loader import *
 
 # 设置 absl 日志级别为 WARNING
 # logging.set_verbosity(logging.WARNING)
 
-
-import gc
 gc.collect()    # 清理不必要的内存
 
 # 动态分配内存
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-            tf.config.experimental.set_virtual_device_configuration(
-                gpu,
-                [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=12*1024)])
-            # 设置GPU内存限制为 14 GB
-            print('Using GPU', gpu)
-    except RuntimeError as e:
-        print(e)
-
-
-# train_spectrogram_ds = train_spectrogram_ds.map(lambda spec, label: (tf.expand_dims(spec, axis=-1), label))
+def configure_gpu():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                tf.config.experimental.set_virtual_device_configuration(
+                    gpu,
+                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=12 * 1024)])
+                print(f'Using GPU: {gpu}')
+        except RuntimeError as e:
+            print(f"Error configuring GPU: {e}")
 
 # 转换为16bit的音频
 def convert_to_16bit_wav(input_path, output_path):
@@ -54,230 +49,191 @@ seed = 42
 tf.random.set_seed(seed)
 np.random.seed(seed)
 
-# DATASET_PATH = '../mini_speech_commands'
-DATASET_PATH = '../AISHELL-WakeUp-1-sample\\SPEECHDATA\\speech\\wav'
-data_dir = pathlib.Path(DATASET_PATH)
-
-commands = np.array(tf.io.gfile.listdir(str(data_dir)))
-commands = commands[(commands != 'README.md') & (commands != '.DS_Store')]
-print('Commands:', commands)
-
-# 返回训练集和验证集
-# 每个批次中的样本会按类别均匀分布，确保每个批次中都有不同类别的样本。
-# 假设你有一个音频文件，其采样率为 16000 Hz，长度为 2 秒。原始音频文件包含 32000 个样本点。通过设置 output_sequence_length=16000，
-# 这个音频文件会被裁剪为 1 秒长的片段，保留前 16000 个样本点。如果音频文件长度不足 1 秒（例如 8000 个样本点），则会被填充到 16000 个样本点。
-
-# 从数据文件夹中加载音频数据集，分为训练集和验证集，设置了批量大小、验证集比例、随机种子、输出序列长度等参数
-train_ds, val_ds = tf.keras.utils.audio_dataset_from_directory(
-    directory=data_dir,
-    batch_size=256,      # 每次从数据集中取出 128 个音频样本进行训练或验证
-    validation_split=0.2,   # 从整个数据集中随机选取 20% 的数据作为验证集，剩余 80% 的数据作为训练集
-    seed=0,
-    output_sequence_length=16000,
-    class_names=['0_Non_wake', '1_wake_words'],  # 显式指定类别名称
-    subset='both'
-    )   # 同时加载训练集和验证集
-
-# 列出所有类别标签
-label_names = np.array(train_ds.class_names)
-print()
-print("label names:", label_names)
-
-# 列出所有子目录（即命令类别），并过滤掉一些非命令类别的文件
-commands = np.array(tf.io.gfile.listdir(str(data_dir)))
-commands = commands[(commands != 'README.md') & (commands != '.DS_Store')]
-print('Commands:', commands)
-
-
-# 应用于测试集和训练集
-# tf.data.AUTOTUNE 用于自动调整并行处理的线程数，以优化性能
-train_ds = train_ds.map(squeeze, tf.data.AUTOTUNE)
-val_ds = val_ds.map(squeeze, tf.data.AUTOTUNE)
-
-# 再拆分
-test_ds = val_ds.shard(num_shards=2, index=0)
-val_ds = val_ds.shard(num_shards=2, index=1)
-
-# 取出波形数据
-for example_audio, example_labels in train_ds.take(1):
-    print(f"example_audio.shape: {example_audio.shape}")
-    print(f"example_labels.shape: {example_labels.shape}")
-    # 绘制取出的前九个音频波形
-    plot_audio_waveforms(example_audio, example_labels, label_names, rows=3, cols=3, figsize=(16, 10))
-    break
-
-# 打印转换后的效果（各向量维度）
-for i in range(3):
-    # 标签：label_names[example_labels[0]]
-    # 波形：example_audio[0]
-    # 频谱图：get_spectrogram(example_audio[0])
-    label = label_names[example_labels[i]]
-    waveform = example_audio[i]
-    spectrogram = get_spectrogram(waveform)
-
-    print('Label:', label)
-    print('Waveform shape:', waveform.shape)
-    print('Spectrogram shape:', spectrogram.shape)
-    print('Audio playback\n')
-    display.display(display.Audio(waveform, rate=16000))
-
-# 绘制音频波形图和频谱图的函数
-plot_waveform_and_spectrogram(waveform, spectrogram, label, figsize=(12, 8))
-
-# 创建频谱数据集
-train_spectrogram_ds = make_spec_ds(train_ds)
-val_spectrogram_ds = make_spec_ds(val_ds)
-test_spectrogram_ds = make_spec_ds(test_ds)
-
-# 检查数据集的输出形状
-print(f'train_da_shape:{train_ds.element_spec}')
-
-# 打印数据集的批次形状
-audio_shape = train_ds.element_spec[0].shape
-label_shape = train_ds.element_spec[1].shape
-print(f"Audio shape: {audio_shape}")
-print(f"Label shape: {label_shape}")
-
-# 取出频谱数据
-for e_g_spectrograms, example_spect_labels in train_spectrogram_ds.take(1):
-    # example_audio.shape: (10, 16000)
-    print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
-    print(f"example_spect_labels.shape: {example_spect_labels.shape}")
-    # 绘制前九张的频谱图
-    plot_spectrograms(e_g_spectrograms, example_spect_labels, label_names, rows=3, cols=3, figsize=(16, 9))
-
-    input_shape = e_g_spectrograms.shape[1:]
-    print('Input shape:', input_shape)
-    num_labels = len(label_names)
-    break
-
-
-# 将数据集存入内存之中
-train_spectrogram_ds = train_spectrogram_ds.cache().shuffle(4096).prefetch(tf.data.AUTOTUNE)
-val_spectrogram_ds = val_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
-test_spectrogram_ds = test_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
-
-
-# 适应归一化层
-norm_layer = layers.Normalization()
-norm_layer.adapt(data=train_spectrogram_ds.map(map_func=lambda spec, label: spec))
-
-# 定义全局正则化器
-l2_reg = regularizers.L2(l2=0.035)
-
-# # 创建数据增强管道
-# data_augmentation = tf.keras.Sequential([
-#     layers.RandomRotation(0.2),  # 随机旋转
-#     layers.RandomZoom(0.2),  # 随机缩放
-#     layers.RandomTranslation(0.1, 0.1),  # 随机平移
-#     layers.RandomContrast(0.2)  # 随机对比度调整
-# ])
-# # 应用数据增强
-# train_spectrogram_ds = train_spectrogram_ds.map(
-#     lambda x, y: (data_augmentation(x, training=True), y),
-#     num_parallel_calls=tf.data.AUTOTUNE
-# )
+Batch = 10     # 训练样本数量
 
 
 
-# 使用函数式 API 构建模型
-inputs = Input(shape=input_shape)
-
-# x = layers.Resizing(128, 128)(inputs)  # 如果输入数据的原始尺寸较小，可以跳过这一步
-x = layers.BatchNormalization()(inputs)
-x = layers.Conv2D(16, 3, kernel_regularizer=l2_reg)(x)
-x = layers.Dropout(0.3)(x)
-x = layers.BatchNormalization()(x)
-x = layers.Activation('relu')(x)
-
-# 残差块
-x = residual_block(x, filters=8, kernel_size=3, stride=1, l2_reg=l2_reg)
-x = residual_block(x, filters=16, kernel_size=3, stride=2, l2_reg=l2_reg)
-
-x = layers.MaxPooling2D()(x)
-x = layers.Dropout(0.3)(x)
-
-# --- GRU层 ---
-# 将CNN输出的4D特征图转换为3D时序数据（假设时间步在高度维度）
-_, height, width, channels = x.shape  # 动态获取维度
-x = layers.Reshape((height, width * channels))(x)  # 转换为 (None, time_steps, features)
-# x = layers.GRU(16, return_sequences=False, kernel_regularizer=l2_reg)(x)  # GRU输出最后一步
-x = layers.GRU(20, return_sequences=True, kernel_regularizer=l2_reg)(x)  # GRU输出所有时间步
-x = layers.Dropout(0.3)(x)  # 新增 Dropout
-
-# --- 调用注意力机制 ---
-attention = SelfAttention(embed_dim=16)  # 假设注意力机制的嵌入维度为8
-x = attention(x)  # 应用注意力机制
-# 注意力机制后可以提取最后一步的输出
-x = layers.Lambda(lambda x: x[:, -1, :])(x)  # 提取GRU最后一个时间步的输出
-
-# x = layers.Flatten()(x)     # 平展为一维向量
-x = layers.Dense(16, kernel_regularizer=l2_reg)(x)
-x = layers.BatchNormalization()(x)
-x = layers.Activation('relu')(x)
-x = layers.Dropout(0.5)(x)
-outputs = layers.Dense(1, activation='sigmoid')(x)
-
-# 构建模型
-model = models.Model(inputs=inputs, outputs=outputs)
-model.summary()
+if __name__ == "__main__":
+    print("Eager Execution Enabled:", tf.executing_eagerly())
+    configure_gpu()     # 启用gpu,动态分配内存
+    tf.profiler.experimental.start('log_dir')
 
 
-# 加权二元交叉熵w使模型更加关注正类
-w = [1.08, 1.0]
+    # data_dir = '../AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
+    data_dir:str = str('D:/PycharmProjects/wark_by_voice/sample_train')
 
-# loss='binary_crossentropy',
-# Adam 优化器
-model.compile(
-    optimizer='adam',
-    loss=weighted_binary_crossentropy(w),
-    metrics=['accuracy'],
-)
+    # 跟踪张量形状变化
+    # tf.debugging.set_log_device_placement(True)
 
+    file_paths, labels = load_dataset(data_dir)  # 加载模型训练文件
+    dataset, label = preprocess_dataset(file_paths, labels)   # 加載自定義預處理
+    label_names = ["1_wake" if x == 1 else "0_non_wake" for x in label]
 
-# 使用自定义回调函数
-EPOCHS = 20
-# callbacks：回调函数，当验证集上的损失在连续 2 个轮数内没有改善时，提前停止训练。
-callbacks = [
-    CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
-    tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
-]
-
-history = model.fit(
-    train_spectrogram_ds,
-    validation_data=val_spectrogram_ds,
-    epochs=EPOCHS,
-    # callbacks=tf.keras.callbacks.EarlyStopping(verbose=1, patience=2),
-    callbacks=callbacks,
-    verbose=1,
-    use_multiprocessing=True,
-    workers=4
-)
-
-# 绘制损失与准确率曲线
-# history 属性是一个字典，记录了训练过程中的各种指标，如损失和准确率
-plot_training_history(history, figsize=(16, 6))
+    # # 迭代一次数据集，确保数据被加载
+    # for batch in dataset.take(1):  # 只迭代一个批次
+    #     print("数据加载完成，第一个批次：", batch)
 
 
-# 绘制混淆矩阵
-model.evaluate(test_spectrogram_ds, return_dict=True)
-y_pred = model.predict(test_spectrogram_ds)
-# y_pred = tf.argmax(y_pred, axis=1)    # 多分类时用
-y_pred = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
-# 真实标签
-y_true = tf.concat(list(test_spectrogram_ds.map(lambda s,lab: lab)), axis=0)
-print("True labels:", y_true)
-print("Predicted labels:", y_pred)
+    # 设定一个固定的 buffer_size
+    buffer_size = 128   # 例如，设定为 128
 
-confusion_mtx = tf.math.confusion_matrix(y_true, y_pred)
-plt.figure(figsize=(10, 8))
-sns.heatmap(confusion_mtx,
-            xticklabels=label_names,
-            yticklabels=label_names,
-            annot=True, fmt='g')
-plt.xlabel('Prediction')
-plt.ylabel('Label')
-plt.show()
+    # 打乱数据集
+    dataset = dataset.shuffle(buffer_size=buffer_size, seed=42)  # 设置随机种子以保证可复现性
+
+    # 划分为训练集和验证集
+    train_size = int(len(file_paths) * 0.8)
+    train_ds = dataset.take(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
+    val_ds = dataset.skip(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
+
+    # 检查数据集的输出形状
+    print(f'train_da_shape:{train_ds.element_spec}')
+
+    # 打印数据集的批次形状
+    audio_shape = train_ds.element_spec[0].shape
+    label_shape = train_ds.element_spec[1].shape
+    print(f"Audio shape: {audio_shape}")
+    print(f"Label shape: {label_shape}")
+
+    # 数据归一化
+    norm_layer = normalize_data(train_ds, val_ds)
+    train_ds, val_ds = preprocess_data(train_ds, val_ds, norm_layer)
+
+    print(f"norm Audio shape: {train_ds.element_spec[0].shape}")
+    print(f"norm Label shape: {train_ds.element_spec[1].shape}")
+
+    # 扩展维度到四维便于卷积输出
+    # 定义一个函数来扩展维度
+    def expand_dims(data, label):
+        data = tf.expand_dims(data, axis=-1)  # 扩展数据的维度
+        return data, label
+
+    # 使用 map 函数将维度扩展应用于每个元素
+    train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+    val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+
+    print("expand train Audio element spec:", train_ds_four.element_spec)
+    print("expand Validation dataset element spec:", val_ds_four.element_spec)
+
+    print("卷积输入维度扩展完成")
+
+    # # 强制加载所有数据
+    # all_data = list(dataset)  # 将所有数据加载到内存
+    # print("所有数据加载完成，数据总数：", len(all_data))
+
+    # 模型构建
+    l2_reg = tf.keras.regularizers.L2(l2=0.035)
+    # 此处根据实际情况调整 ！！！
+    model = CustomModel((None, 26, 13, 1), 2, l2_reg)  # 输入形状应该是 (None, 26, 13, 1)
+
+    # 模型编译（非对称交叉熵，使模型更关注正类
+    weights = [1.08, 1.0]
+    compile_model(model, weights)
+
+    # 训练模型
+    epochs = 10
+    callbacks = [
+        CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
+        tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
+    ]
+    history = train_model(model, train_ds_four, val_ds_four, epochs, callbacks)
+
+
+    export = ExportModel(model)
+
+    try:
+        export(str(Path(data_dir)/ '1_wake_words/SV0001_2_05_F0909.wav'))
+    except Exception as e:
+        print(f"An error occurred while exporting the model: {e}")
+    finally:
+        tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+        imported = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
+        # imported(waveform[tf.newaxis, :])
+        print("end")
+
+
+
+
+    # 取出频谱数据(一个批次必须大于9)
+    # (25, 13)
+    for e_g_spectrograms, example_spect_labels in train_ds_four.take(1):
+        # example_audio.shape: (10, 16000)
+        print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
+        print(f"example_spect_labels.shape: {example_spect_labels.shape}")
+        # 绘制前九张的频谱图
+        plot_spectrograms(e_g_spectrograms, example_spect_labels, label_names, rows=3, cols=3, figsize=(16, 9))
+
+        input_shape = e_g_spectrograms.shape[1:]
+        print('Input shape:', input_shape)
+        num_labels = len(label_names)
+        break
+
+
+    def plot_training_history(history, figsize=(16, 6)):
+        import matplotlib.pyplot as plt
+
+        # 获取训练和验证损失
+        train_loss = history.history['loss']
+        val_loss = history.history['val_loss']
+
+        # 确保长度一致
+        min_length = min(len(train_loss), len(val_loss))
+        train_loss = train_loss[:min_length]
+        val_loss = val_loss[:min_length]
+
+        # 定义 epoch 范围
+        epochs = range(1, min_length + 1)
+
+        # 绘图
+        plt.figure(figsize=figsize)
+        plt.plot(epochs, train_loss, label='Training Loss')
+        plt.plot(epochs, val_loss, label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.show()
+
+    # 绘制损失与准确率曲线
+    # history 属性是一个字典，记录了训练过程中的各种指标，如损失和准确率
+    plot_training_history(history, figsize=(16, 6))
+
+
+    all_labels_class = ['0_non_wake', '1_wake']
+    # 绘制混淆矩阵(可以修改为应用test)
+    model.evaluate(val_ds_four, return_dict=True)
+    y_pred = model.predict(val_ds_four)
+    y_pred = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+    # 真实标签
+    y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
+    print("True labels:", y_true)
+    print("Predicted labels:", y_pred)
+
+    confusion_mtx = tf.math.confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(confusion_mtx,
+                xticklabels=all_labels_class,
+                yticklabels=all_labels_class,
+                annot=True, fmt='g')
+    plt.xlabel('Prediction')
+    plt.ylabel('Label')
+    plt.show()
+
+    # 结束性能分析
+    tf.profiler.experimental.stop()
+
+
+
+
+# # 分割训练集和验证集(随机打乱方案)
+# train_size = int(len(file_paths) * 0.8)
+# train_ds = dataset.take(train_size)
+# val_ds = dataset.skip(train_size)
+#
+# # 应用 shuffle 和 cache
+# train_ds = train_ds.shuffle(buffer_size=4096).cache().batch(Batch).prefetch(tf.data.AUTOTUNE)
+# val_ds = val_ds.cache().batch(Batch).prefetch(tf.data.AUTOTUNE)
+
+
+
 
 # # 小验证
 # x = 'D:\\PycharmProjects\\wark_by_voice\\verify\\1_wake\\c_ya_fast_2_10_1_quiet.wav'
@@ -308,17 +264,16 @@ plt.show()
 
 
 
-
-
-export = ExportModel(model)
-
-try:
-    export(tf.constant(str(data_dir/'1_wake_words/SV0001_2_05_F0909.wav')))
-except Exception as e:
-    print(e)
-finally:
-    tf.saved_model.save(export, "D:\\PycharmProjects\\wark_by_voice\\saved")
-    imported = tf.saved_model.load("D:\\PycharmProjects\\wark_by_voice\\saved")
-    imported(waveform[tf.newaxis, :])
-    print("end")
+# # 创建数据增强管道
+# data_augmentation = tf.keras.Sequential([
+#     layers.RandomRotation(0.2),  # 随机旋转
+#     layers.RandomZoom(0.2),  # 随机缩放
+#     layers.RandomTranslation(0.1, 0.1),  # 随机平移
+#     layers.RandomContrast(0.2)  # 随机对比度调整
+# ])
+# # 应用数据增强
+# train_spectrogram_ds = train_spectrogram_ds.map(
+#     lambda x, y: (data_augmentation(x, training=True), y),
+#     num_parallel_calls=tf.data.AUTOTUNE
+# )
 
