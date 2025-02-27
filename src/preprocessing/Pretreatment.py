@@ -57,25 +57,27 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
         print(f"Error getting windows: {e}")
         windows = tf.zeros([11, 400, 1], dtype=tf.float32)
     # print(f"windows shape: {windows.shape}")
+
     # 测试标记
     channels = get_mfcc(windows, num_windows=num_win)
     return tf.convert_to_tensor(channels, dtype=tf.float32)
 
-    try:
-        # 提取特征获取帧的多通道，假设返回形状为(num_channels, num_windows, n_mfcc)
-        channels = get_mfcc(windows, num_windows=num_win)
-
-        # 检查 channels 的形状是否正确
-        if len(channels.shape) != 3 or channels.shape[-1] != n_mfcc:
-            raise ValueError(
-                f"MFCC features shape is incorrect. Expected (num_channels, num_windows, {n_mfcc}), "
-                f"got {channels.shape}")
-
-        return tf.convert_to_tensor(channels, dtype=tf.float32)
-    except Exception as e:
-        print(f"Error getting MFCC features: {e}")
-        sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
-        return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
+    # try:
+    #     # 提取特征获取帧的多通道，假设返回形状为(num_channels, num_windows, n_mfcc)
+    #     channels = get_mfcc(windows, num_windows=num_win)
+    #
+    #     # 检查 channels 的形状是否正确
+    #     channels_shape = tf.shape(channels)
+    #     print(f"channels_shape: {channels_shape}")
+    #     if len(channels_shape) != 3 or channels_shape[-1] != n_mfcc:
+    #         raise ValueError(
+    #             f"MFCC features shape is incorrect), "
+    #             f"got {channels_shape}")
+    #     return tf.convert_to_tensor(channels, dtype=tf.float32)
+    # except Exception as e:
+    #     print(f"Error getting MFCC features: {e}")
+    #     sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
+    #     return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
 
 
 def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):

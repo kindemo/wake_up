@@ -69,7 +69,7 @@ class ExportModel(tf.Module):
 
         # 设置阈值并判断类别
         threshold = 0.5
-        class_ids = tf.cast(results > threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
+        class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
 
         return {'predictions': results, 'class_ids': class_ids}
 

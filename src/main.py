@@ -49,7 +49,7 @@ seed = 42
 tf.random.set_seed(seed)
 np.random.seed(seed)
 
-Batch = 10     # 训练样本数量
+Batch = 32     # 训练样本数量
 
 
 
@@ -59,8 +59,8 @@ if __name__ == "__main__":
     # tf.profiler.experimental.start('log_dir')
 
 
-    # data_dir = '../AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
-    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
+    data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
+    # data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
 
     # 跟踪张量形状变化
     # tf.debugging.set_log_device_placement(True)
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
 
     # 设定一个固定的 buffer_size
-    buffer_size = 128   # 例如，设定为 128
+    buffer_size = 512   # 例如，设定为 512
 
     # 打乱数据集
     dataset = dataset.shuffle(buffer_size=buffer_size, seed=42)  # 设置随机种子以保证可复现性
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     compile_model(model, weights)
 
     # 训练模型
-    epochs = 2
+    epochs = 20
     callbacks = [
         CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
@@ -207,13 +207,14 @@ if __name__ == "__main__":
     # 绘制混淆矩阵(可以修改为应用test)
     model.evaluate(val_ds_four, return_dict=True)
     y_pred = model.predict(val_ds_four)
-    y_pred = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+    y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
     # 真实标签
     y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
-    print("True labels:", y_true)
-    print("Predicted labels:", y_pred)
+    # print("True labels:", y_true)
+    # print("Predicted value:", y_pred)
+    # print("Predicted labels:", y_pred_class)
 
-    confusion_mtx = tf.math.confusion_matrix(y_true, y_pred)
+    confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
     plt.figure(figsize=(10, 8))
     sns.heatmap(confusion_mtx,
                 xticklabels=all_labels_class,

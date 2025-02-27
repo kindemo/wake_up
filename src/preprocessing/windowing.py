@@ -55,7 +55,7 @@ def get_windows(waveform: tf.Tensor,
     pad_amount = tf.maximum(total_length - original_length, 0)
     waveform_padded = tf.pad(waveform, [[0, pad_amount]], constant_values=0.0)
 
-    # 执行分帧
+    # 执行分帧(无重叠分小帧)
     frames = tf.signal.frame(waveform_padded, frame_length, frame_step, pad_end=False, axis=0)
     num_frames_actual = tf.shape(frames)[0]
 
