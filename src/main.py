@@ -56,11 +56,11 @@ Batch = 10     # 训练样本数量
 if __name__ == "__main__":
     print("Eager Execution Enabled:", tf.executing_eagerly())
     configure_gpu()     # 启用gpu,动态分配内存
-    tf.profiler.experimental.start('log_dir')
+    # tf.profiler.experimental.start('log_dir')
 
 
     # data_dir = '../AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
-    data_dir:str = str('D:/PycharmProjects/wark_by_voice/sample_train')
+    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
 
     # 跟踪张量形状变化
     # tf.debugging.set_log_device_placement(True)
@@ -126,11 +126,11 @@ if __name__ == "__main__":
     model = CustomModel((None, 26, 13, 1), 2, l2_reg)  # 输入形状应该是 (None, 26, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
-    weights = [1.08, 1.0]
+    weights = [1.05, 1.0]
     compile_model(model, weights)
 
     # 训练模型
-    epochs = 10
+    epochs = 2
     callbacks = [
         CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
@@ -139,16 +139,22 @@ if __name__ == "__main__":
 
 
     export = ExportModel(model)
+    tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+    print("end")
 
-    try:
-        export(str(Path(data_dir)/ '1_wake_words/SV0001_2_05_F0909.wav'))
-    except Exception as e:
-        print(f"An error occurred while exporting the model: {e}")
-    finally:
-        tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
-        imported = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
-        # imported(waveform[tf.newaxis, :])
-        print("end")
+
+
+    # try:
+    #     audio_file_path = str(Path(data_dir)/ '1_wake_words/c_ya_slow_2_10_3_quiet.wav')
+    #     input_audio = tf.constant(audio_file_path, dtype=tf.string)
+    #     export(input_audio)
+    # except Exception as e:
+    #     print(f"An error occurred while exporting the model: {e}")
+    # finally:
+    #     tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+    #     imported = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
+    #     # imported(waveform[tf.newaxis, :])
+    #     print("end")
 
 
 
@@ -218,7 +224,7 @@ if __name__ == "__main__":
     plt.show()
 
     # 结束性能分析
-    tf.profiler.experimental.stop()
+    # tf.profiler.experimental.stop()
 
 
 

@@ -43,6 +43,8 @@ total_files = total_count["0_non_wake"] + total_count["1_wake"]
 total_accuracy = total_correct / total_files if total_files > 0 else 0
 print(f"\nTotal Accuracy: {total_accuracy:.2f}")
 
+
+
 # # 绘制预测的概率分布
 # plt.bar('wake_words_probability', prediction_probabilities[0])
 # plt.xlabel('Class')

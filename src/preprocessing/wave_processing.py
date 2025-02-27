@@ -3,17 +3,19 @@ import tensorflow as tf
 
 
 # 用于删除音频数据的额外轴，因为音频数据只包含单声道
-def squeeze(audio, labels):
-    # print(f'通道前：{audio.shape}')
-    # 如果音频是双声道，取平均值转换为单声道
-    # 检查是否为双声道或多声道
-    if len(audio.shape) > 2 and audio.shape[-1] is None:  # 如果有多个通道
-        audio = tf.reduce_mean(audio, axis=-1)  # 对通道取平均值
-    # 删除最后一个维度
-    if len(audio.shape) > 2 and audio.shape[-1] == 1:
+def squeeze(audio):
+    """
+    :param audio: tensor输入
+    :return:
+    """
+    # 如果数据是多声道（形状为 (n, channels)），则转换为单声道
+    if len(audio.shape) > 1 and audio.shape[-1] > 1:
+        # 将多声道音频转换为单声道（通过取平均值）
+        audio = tf.reduce_mean(audio, axis=-1)
+    elif len(audio.shape) > 1 and audio.shape[-1] == 1:
+        # 如果已经是单声道但有额外的维度（形状为 (n, 1)），则移除多余维度
         audio = tf.squeeze(audio, axis=-1)
-    # print(f'通道后：{audio.shape}')
-    return audio, labels
+    return audio
 
 
 # 计算音频平均分贝

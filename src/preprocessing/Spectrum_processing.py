@@ -4,89 +4,67 @@ import tensorflow as tf
 
 
 #mfcc流 (时间步, 帧内采样点, [通道数量]) -> (通道数量, 时间步, n_mfcc)
-def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_windows=11, fft_length=512, num_mel_bins=40, lower_frequency=100, upper_frequency=4000):
+def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_windows=11, fft_length=512, num_mel_bins=40,
+             lower_frequency=100, upper_frequency=4000):
     """
-    提取音频的MFCC特征。
-    因为已经通过windowing进行了分帧，所以对于每个通道都是num_windows*frame_length的大小，
-    即总的采样点固定了，所以每个通道的分帧模式和生成帧数量都相等
-    输入的waveform形状可以是 (帧时间步, 帧内采样点) 或 (帧时间步, 帧内采样点, 通道数量)。
-    输出的MFCC特征形状为 (通道数量, 小帧时间步, n_mfcc)
+        提取音频的MFCC特征。
+        因为已经通过windowing进行了分帧，所以对于每个通道都是num_windows*frame_length的大小，
+        即总的采样点固定了，所以每个通道的分帧模式和生成帧数量都相等
+        输入的waveform形状可以是 (帧时间步, 帧内采样点) 或 (帧时间步, 帧内采样点, 通道数量)。
+        输出的MFCC特征形状为 (通道数量, 小帧时间步, n_mfcc)
     """
-    # 确保输入是 TensorFlow 张量
     frame_wave = tf.convert_to_tensor(frame_wave, dtype=tf.float32)
+    shape = tf.shape(frame_wave)
 
-    # 获取输入形状
-    shape = frame_wave.shape
-    if len(shape) == 2:  # 单通道音频
-        time_steps, samples_per_frame = shape
+    # 确定通道数
+    if len(frame_wave.shape) == 2:
+        time_steps, samples_per_frame = shape[0], shape[1]
         num_channels = 1
-    elif len(shape) == 3:  # 多通道音频
-        time_steps, samples_per_frame, num_channels = shape
+        frame_wave = tf.expand_dims(frame_wave, axis=-1)  # 添加通道维度
     else:
-        raise ValueError("Waveform shape must be either (time_steps, samples_per_frame) or (time_steps, samples_per_frame, num_channels).")
+        time_steps, samples_per_frame, num_channels = shape[0], shape[1], shape[2]
 
-    # 初始化一个列表来存储每个通道的MFCC特征
-    mfccs_list = []
+    # 使用TensorArray代替Python列表
+    mfccs_ta = tf.TensorArray(size=num_channels, dtype=tf.float32)
 
-    # 对每个通道分别提取MFCC特征
-    for channel in range(num_channels):
-        if len(shape) == 2:  # 单通道音频
-            single_channel = frame_wave
-        else:  # 多通道音频
-            single_channel = frame_wave[:, :, channel]  # 划分出每个通道的数据 形状为 (帧时间步, 帧内采样点)
-
-        # 将时间步和帧内采样点展平为一维序列，以便进行STFT
-        single_channel = tf.reshape(single_channel, [-1])  # 形状为 (帧时间步 * 帧内采样点,)
-        # print(f"Extraction for channel {channel}:")
-        # print(f"Flattened shape: {single_channel.shape}")  # 验证展平后的形状
-        assert len(single_channel.shape) == 1
+    # 循环处理每个通道
+    for channel in tf.range(num_channels):
+        single_channel = frame_wave[..., channel]
+        single_channel = tf.reshape(single_channel, [-1])  # 展平
 
         # 计算STFT
         stft = tf.signal.stft(
             single_channel,
             frame_length=frame_length,
             frame_step=frame_step,
-            fft_length=fft_length,
-            window_fn=tf.signal.hann_window,  # 使用汉明窗
-            pad_end = False             # 如果信号长度不足，则丢弃
+            fft_length=fft_length
         )
         spectrogram = tf.abs(stft)
 
-        # 创建梅尔滤波器组
-        mel_filterbank = tf.signal.linear_to_mel_weight_matrix(
+        # 创建Mel滤波器矩阵
+        mel_matrix = tf.signal.linear_to_mel_weight_matrix(
             num_mel_bins=num_mel_bins,
-            num_spectrogram_bins=spectrogram.shape[-1],
+            num_spectrogram_bins=fft_length // 2 + 1,
+            sample_rate=16000,  # 根据实际情况调整
             lower_edge_hertz=lower_frequency,
             upper_edge_hertz=upper_frequency
         )
 
-        # 应用梅尔滤波器组
-        mel_spectrogram = tf.tensordot(spectrogram, mel_filterbank, 1)
-        mel_spectrogram.set_shape(spectrogram.shape[:-1].concatenate(mel_filterbank.shape[-1:]))
-
-        # 取对数
-        log_mel_spectrogram = tf.math.log(mel_spectrogram + 1e-6)
+        # 转换到Mel频谱
+        mel_spectrogram = tf.tensordot(spectrogram, mel_matrix, 1)
+        log_mel = tf.math.log(mel_spectrogram + 1e-6)
 
         # 计算MFCC
-        mfcc = tf.signal.dct(log_mel_spectrogram, type=2, axis=-1, norm=None)
-        mfcc = mfcc[..., :n_mfcc]  # 取前n_mfcc个系数(最大可取40个桶）
+        mfcc = tf.signal.mfccs_from_log_mel_spectrograms(log_mel)
+        mfcc = mfcc[..., :n_mfcc]  # 截取指定系数
 
-        # 将当前通道的MFCC特征添加到列表中
-        mfccs_list.append(mfcc)
+        # 调整形状并写入TensorArray
+        expected_frames = (tf.size(single_channel) - frame_length) // frame_step + 1
+        mfcc = tf.reshape(mfcc, [expected_frames, n_mfcc])
+        mfccs_ta = mfccs_ta.write(channel, mfcc)
 
-    # 将所有通道的MFCC特征合并为一个张量
-    if num_channels == 1:
-        mfccs = tf.expand_dims(mfccs_list[0], axis=0)  # 单通道音频：形状为 (1, 帧时间步, n_mfcc)
-        assert mfccs.shape[0] == num_channels and mfccs.shape[-1] == n_mfcc, "二维张量音频输出维度顺序有误"
-    else:
-        mfccs = tf.stack(mfccs_list, axis=0)  # 多通道音频：形状为 (通道数量, 帧时间步, n_mfcc)
-        assert mfccs.shape[0] == num_channels and mfccs.shape[-1] == n_mfcc, "三维张量音频输出维度顺序有误"
-
-    sum_mfcc_frames = int(np.floor((frame_length * num_windows - frame_length) / 160)) + 1
-    # 验证输出形状
-    # print("mfccs.shape:", mfccs.shape, "sum_mfcc_frames:", sum_mfcc_frames)
-
-    assert mfccs.shape[1] == sum_mfcc_frames, f"输出的分帧数量错误:{mfccs.shape[1], sum_mfcc_frames}"
+    # 堆叠所有通道的结果
+    mfccs = mfccs_ta.stack()
     return mfccs
 
 

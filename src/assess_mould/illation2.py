@@ -2,8 +2,7 @@ from pathlib import Path
 
 import tensorflow as tf
 import os
-import numpy as np
-from exceptiongroup import catch
+from src.preprocessing.wave_processing import squeeze as squeezing
 
 # 加载模型
 base_path = Path("D:\PycharmProjects\wark_by_voice")
@@ -15,6 +14,7 @@ def predict_audio(file_path):
     audio = tf.io.read_file(file_path)
     audio, _ = tf.audio.decode_wav(audio, desired_channels=1, desired_samples=16000)
     audio = tf.squeeze(audio, axis=-1)
+    # audio = squeezing(audio)
     audio = audio[tf.newaxis, :]  # 增加批次维度
     predictions = imported(audio)
 

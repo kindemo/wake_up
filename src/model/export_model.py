@@ -1,8 +1,7 @@
-import warnings
 import tensorflow as tf
-from scipy.io import wavfile
 
-from src.preprocessing.Pretreatment import split_audio_channels, preprocess_dataset
+from src.preprocessing.Pretreatment import split_audio_channels
+from src.preprocessing.wave_processing import squeeze as squeezing
 
 
 class ExportModel(tf.Module):
@@ -32,20 +31,21 @@ class ExportModel(tf.Module):
                 # 用tensorflow自带的库
                 audio_binary = tf.io.read_file(x)
                 wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
-
                 # 将音频数据转换为 tf.float32 类型
                 wave = tf.cast(wave, dtype=tf.float32)
-                print("ExportModel’s wave shape before squeeze:", wave.shape)
-                wave = tf.squeeze(wave, axis=-1)
-                s_rate = tf.cast(s_rate, dtype=tf.float32)
+                # print("ExportModel’s wave shape before squeeze:", wave.shape)
+                wave = squeezing(wave)
             except Exception as e:
                 print(f"Error loading audio file: {e}")
                 wave = tf.zeros(16000, dtype=tf.float32)
         elif x.dtype == tf.float32:
             # 需要改进
             wave = x
+            wave = tf.cast(wave, dtype=tf.float32)
         else:
             raise ValueError("Unsupported input type. Expected file path or audio data.")
+
+        s_rate = tf.cast(s_rate, dtype=tf.float32)
 
         # 将音频划分为多个通道
         channels = split_audio_channels(wave, s_rate, self.frame_length, self.n_mfcc, self.num_win)
@@ -56,10 +56,12 @@ class ExportModel(tf.Module):
         # 遍历每个通道
         for i in tf.range(tf.shape(channels)[0]):
             channel = channels[i]
-            channel = tf.expand_dims(channel, axis=0)       # 添加批次维度
-            channel = tf.expand_dims(channel, axis=-1)      # 添加通道维度
-            result = self.model(channel, training=False)    # 模型预测
-            result = tf.squeeze(result, axis=0)     # 去掉批次维度
+            # print("Channel", i, "shape:", channels[i].shape)
+            # print("Channel", i, "data:", channels[i][:50])  # 查看前 50 个特征
+            channel = tf.expand_dims(channel, axis=0)  # 添加批次维度
+            channel = tf.expand_dims(channel, axis=-1)  # 添加通道维度
+            result = self.model(channel, training=False)  # 模型预测
+            result = tf.squeeze(result, axis=0)  # 去掉批次维度
             results = results.write(i, result)  # 将结果写入 TensorArray
 
         # 将 TensorArray 转换为张量
@@ -70,6 +72,8 @@ class ExportModel(tf.Module):
         class_ids = tf.cast(results > threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
 
         return {'predictions': results, 'class_ids': class_ids}
+
+
 
 
 

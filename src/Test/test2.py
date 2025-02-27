@@ -14,7 +14,12 @@ def load_and_split_audio(file_path, label):
     def py_load_and_split_audio(file_path_py, label_py):
         try:
             # 将 Tensor 转换为 Python 字符串
-            file_path_str = file_path_py.numpy().decode('utf-8')
+            if isinstance(file_path_py, bytes):  # 判断是否为字节类型
+                file_path_str =  file_path_py.decode('utf-8')  # 如果是字节类型，解码为字符串
+            elif isinstance(file_path_py, str):  # 判断是否为字符串类型
+                file_path_str =  file_path_py  # 如果是字符串类型，直接返回
+            else:
+                raise TypeError("file_path_py must be of type bytes or str")  # 如果不是这两种类型，抛出错误
             # 划分为多个通道
             channels = split_audio_channels(file_path_str)
             labels = tf.repeat(label_py, repeats=tf.shape(channels)[0])  # 为每个通道重复标签

@@ -1,12 +1,10 @@
 import tensorflow as tf
 
-import tensorflow as tf
-
 
 def get_windows(waveform: tf.Tensor,
-                           frame_length: int = 400,
-                           frame_step: int = 400,
-                           num_windows: int = 11) -> tf.Tensor:
+                frame_length = 400,
+                frame_step = 400,
+                num_windows = 11) -> tf.Tensor:
     """
     TensorFlow版音频无重叠分帧+滑动拼接窗（修正类型错误版）
 
@@ -20,9 +18,9 @@ def get_windows(waveform: tf.Tensor,
         Tensor形状为（num_windows, frame_length, num_windows_available）
     """
     # 强制参数转换为整数
-    frame_length = int(frame_length)
-    frame_step = int(frame_step)
-    num_windows = int(num_windows)
+    frame_length = tf.cast(frame_length, tf.int32)
+    frame_step = tf.cast(frame_step, tf.int32)
+    num_windows = tf.cast(num_windows, tf.int32)
 
     # 确保输入是一维Tensor
     waveform = tf.convert_to_tensor(waveform, dtype=tf.float32)
@@ -30,6 +28,7 @@ def get_windows(waveform: tf.Tensor,
 
     # 计算最小所需长度（使用整数运算）
     min_required_length = (num_windows - 1) * frame_step + frame_length
+    min_required_length = tf.cast(min_required_length, tf.int32)
     original_length = tf.shape(waveform)[0]
 
     # 动态检查输入长度
@@ -41,11 +40,10 @@ def get_windows(waveform: tf.Tensor,
     ]):
         waveform = tf.identity(waveform)
 
-    # 修正1：使用显式整数类型转换
     def calculate_frames(wave_len):
         return tf.cast(
             tf.math.ceil(
-                (tf.cast(wave_len, tf.float32) - frame_length) / frame_step
+                (tf.cast(wave_len, tf.float32) - tf.cast(frame_length, tf.float32)) / tf.cast(frame_step, tf.float32)
             ),
             tf.int32
         ) + 1
@@ -74,13 +72,14 @@ def get_windows(waveform: tf.Tensor,
     ]):
         frames = tf.identity(frames)
 
-    # 生成窗口索引（显式指定整数类型）
     start_indices = window_stride * tf.range(num_windows_available, dtype=tf.int32)
     window_indices = start_indices[:, tf.newaxis] + tf.range(num_windows, dtype=tf.int32)[tf.newaxis, :]
 
     # 收集窗口数据并调整维度
     windows = tf.gather(frames, window_indices)
     return tf.transpose(windows, [1, 2, 0])
+
+
 
 
 class TestGetWindows(tf.test.TestCase):
@@ -106,6 +105,7 @@ class TestGetWindows(tf.test.TestCase):
 
         # 验证参数
         min_required_length = (num_windows - 1) * frame_step + frame_length
+        min_required_length = tf.cast(min_required_length, tf.int32)
         self.assertEqual(min_required_length, 4000)  # 确保最小所需长度为 4000
 
         result = get_windows(waveform, frame_length, frame_step, num_windows)

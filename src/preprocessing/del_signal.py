@@ -1,24 +1,21 @@
 # del_signal tf 源代码
-import unittest
 from unittest.mock import patch
-
-import librosa
 import numpy as np
-
-
 import tensorflow as tf
+from src.preprocessing.wave_processing import squeeze as squeezing
 
-import tensorflow as tf
 
 def short_time_energy(frame):
     """计算短时能量"""
     return tf.reduce_sum(tf.square(frame))
+
 
 def zero_crossing_rate(frame):
     """计算短时过零率"""
     sign_frame = tf.sign(frame)
     diff_sign = tf.abs(sign_frame[:-1] - sign_frame[1:])
     return 0.5 * tf.reduce_sum(diff_sign)
+
 
 def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_threshold):
     """
@@ -30,8 +27,12 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
     :param zcr_threshold: 过零率阈值
     :return: 去除两端静音的音频信号
     """
-    # 将信号分帧
+    # 将信号分帧（必须为int32类型)
+    frame_length = tf.cast(frame_length, tf.int32)
+    hop_length = tf.cast(hop_length, tf.int32)
     frames = tf.signal.frame(signal, frame_length=frame_length, frame_step=hop_length, pad_end=True)
+    frame_length = tf.cast(frame_length, tf.int64)
+    hop_length = tf.cast(hop_length, tf.int64)
 
     # 计算每一帧的短时能量和过零率
     energy = tf.map_fn(short_time_energy, frames)
@@ -44,21 +45,22 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
         raise ValueError("语音段未检测到，请调整能量阈值。")
 
     start = tf.argmax(tf.cast(energy_high, tf.int64))  # 找到第一个满足能量阈值的帧
-    end = tf.cast(tf.size(energy_high), tf.int64) - tf.argmax(tf.reverse(tf.cast(energy_high, tf.int64), axis=[0]), output_type=tf.int64) - 1
+    end = tf.cast(tf.size(energy_high), tf.int64) - tf.argmax(tf.reverse(tf.cast(energy_high, tf.int64), axis=[0]),
+                                                              output_type=tf.int64) - 1
 
     zcr_hold = zcr_threshold * tf.reduce_max(zcr)
 
     # 第二级判决：从粗略的语音段向两侧扩展，结合低能量和过零率
-    def expand_start(start):
-        condition = start > 0 and (energy[start - 1] > energy_threshold or
-                                   (zcr[start - 1] > zcr_hold and energy[start - 1] > 0.2 * energy_threshold))
-        return tf.cond(condition, lambda: expand_start(start - 1), lambda: start)
+    def expand_start(i):
+        condition = i > 0 and (energy[i - 1] > energy_threshold or
+                               (zcr[i - 1] > zcr_hold and energy[i - 1] > 0.2 * energy_threshold))
+        return tf.cond(condition, lambda: expand_start(i - 1), lambda: i)
 
-    def expand_end(end):
+    def expand_end(j):
         energy_size = tf.cast(tf.size(energy), tf.int64)
-        condition = end < energy_size - 1 and (energy[end + 1] > energy_threshold or
-                                               (zcr[end + 1] > zcr_hold and energy[end + 1] > 0.2 * energy_threshold))
-        return tf.cond(condition, lambda: expand_end(end + 1), lambda: end)
+        condition = j < energy_size - 1 and (energy[j + 1] > energy_threshold or
+                                             (zcr[j + 1] > zcr_hold and energy[j + 1] > 0.2 * energy_threshold))
+        return tf.cond(condition, lambda: expand_end(j + 1), lambda: j)
 
     start = expand_start(start)
     end = expand_end(end)
@@ -72,6 +74,7 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
     trimmed_signal = tf.convert_to_tensor(trimmed_signal, dtype=tf.float32)
     return trimmed_signal
 
+
 def del_signal_ini(sr, data):
     """
     需要确保输入为单声道音频
@@ -82,6 +85,13 @@ def del_signal_ini(sr, data):
     # 确保输入类型
     sr = tf.cast(sr, dtype=tf.float32)
     data = tf.cast(data, dtype=tf.float32)
+
+    # 转换为单声道
+    data = squeezing(data)
+
+    # 检查是否为单声道
+    if len(data.shape) > 1:
+        raise ValueError("输入音频必须是单声道！")
 
     # 将数据归一化到 [-1.0, 1.0]
     signal = data / (tf.reduce_max(tf.abs(data)) + 1e-6)
@@ -102,9 +112,9 @@ def del_signal_ini(sr, data):
     # 执行端点检测
     trimmed_signal = endpoint_detection(
         data_filtered,
-        frame_length=tf.cast(tf.math.floor(sr * 0.025), tf.int64),  # 25ms帧长
-        hop_length=tf.cast(tf.math.floor(sr * 0.010), tf.int64),  # 10ms帧移
-        energy_threshold=0.2 * tf.reduce_max(tf.square(data_filtered)),  # 能量阈值
+        frame_length=tf.cast(sr * 0.025, tf.int64),  # 25ms帧长
+        hop_length=tf.cast(sr * 0.010, tf.int64),  # 10ms帧移
+        energy_threshold=0.1 * tf.reduce_max(tf.square(data_filtered)),  # 能量阈值
         zcr_threshold=0.25  # 过零率阈值
     )
 
@@ -174,6 +184,7 @@ class TestDelSignalIni(tf.test.TestCase):
         self.assertGreater(len(trimmed_signal), 0)  # 输出信号长度应大于0
         self.assertLess(len(trimmed_signal), len(signal))  # 输出信号应短于原始信号
         self.assertEqual(trimmed_signal.shape.ndims, 1)  # 输出信号应为一维张量
+
 
 if __name__ == '__main__':
     tf.test.main()

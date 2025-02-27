@@ -1,10 +1,11 @@
 # data_loader.py
 import pathlib
-import tensorflow as tf
-import numpy as np
 from pathlib import Path
 
-def load_dataset(dataset_path: str='../AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'):
+import numpy as np
+
+
+def load_dataset(dataset_path: str = '../AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'):
     # 创建数据集路径
     data_dir = pathlib.Path(dataset_path)
     print(f"Loading dataset from: {data_dir}")
@@ -18,12 +19,10 @@ def load_dataset(dataset_path: str='../AISHELL-WakeUp-1-sample/SPEECHDATA/speech
     commands = np.array([item.name for item in data_dir.iterdir() if item.is_dir() and not item.name.startswith('.')])
     print('Commands:', commands)
 
-
     # 标签映射（假设子目录名称代表类别）
     labels = np.array([0 if '0_non_wake' in Path(path).parts[-2] else 1 for path in file_paths])
 
     return file_paths, labels
-
 
     # # 创建 TensorFlow Dataset
     # dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))

@@ -1,6 +1,5 @@
 import unittest
 import warnings
-from math import floor
 from unittest.mock import patch
 
 import scipy.io.wavfile as wavfile
@@ -9,6 +8,7 @@ import tensorflow as tf
 from src.preprocessing.Spectrum_processing import get_mfcc
 from src.preprocessing.del_signal import del_signal_ini
 from src.preprocessing.windowing import get_windows
+from src.preprocessing.wave_processing import squeeze as squeezing
 
 
 def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
@@ -21,18 +21,34 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     :param num_win:
     :return: 返回形状为 (num_channels, 26, 13) 的张量。
     """
+    wave = tf.cast(wave, dtype=tf.float32)
+    s_rate = tf.cast(s_rate, dtype=tf.float32)
 
-    try:
-        # 假设 wave 是一个 TensorFlow 张量
-        # 将音频数据转换为 tf.float32 类型
-        wave = tf.cast(wave, dtype=tf.float32)
-        s_rate = tf.cast(s_rate, dtype=tf.float32)
+    # try:
+    #     # 假设 wave 是一个 TensorFlow 张量
+    #     # 将音频数据转换为 tf.float32 类型
+    #     # 调用降噪和端点检测函数
+    #     waveform = del_signal_ini(s_rate, wave)  # 降噪端点检测
+    # except Exception as e:
+    #     print(f"Error deleting audio file: {e}")
+    #     try:
+    #         if 'waveform' in locals():
+    #             print("waveform 已被定义和赋值，其值为:", waveform)
+    #     except NameError:
+    #             print("waveform 未被定义和赋值")
+    #     waveform = tf.zeros(16000, dtype=tf.float32)
 
-        # 调用降噪和端点检测函数
-        waveform = del_signal_ini(s_rate, wave)  # 降噪端点检测
-    except Exception as e:
-        print(f"Error deleting audio file: {e}")
-        waveform = tf.zeros(16000, dtype=tf.float32)
+    # 先测试无端点检测
+    # 确保输入类型
+    data = tf.cast(wave, dtype=tf.float32)
+    # 转换为单声道
+    data = squeezing(data)
+    # 检查是否为单声道
+    if len(data.shape) > 1:
+        raise ValueError("输入音频必须是单声道！")
+
+    # 将数据归一化到 [-1.0, 1.0]
+    waveform = data / (tf.reduce_max(tf.abs(data)) + 1e-6)
 
     try:
         # 进行无重叠拼帧
@@ -40,6 +56,10 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     except Exception as e:
         print(f"Error getting windows: {e}")
         windows = tf.zeros([11, 400, 1], dtype=tf.float32)
+    # print(f"windows shape: {windows.shape}")
+    # 测试标记
+    channels = get_mfcc(windows, num_windows=num_win)
+    return tf.convert_to_tensor(channels, dtype=tf.float32)
 
     try:
         # 提取特征获取帧的多通道，假设返回形状为(num_channels, num_windows, n_mfcc)
@@ -54,7 +74,7 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
         return tf.convert_to_tensor(channels, dtype=tf.float32)
     except Exception as e:
         print(f"Error getting MFCC features: {e}")
-        sum_mfcc_frames = tf.cast(tf.floor((frame_length * num_win - frame_length) / 160) + 1, tf.int64)
+        sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
         return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
 
 
@@ -66,21 +86,27 @@ def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):
     返回形状为 (num_channels, 26, 13) 的张量。
     """
     try:
-        file_path = file_path.decode("utf-8")  # 使用 UTF-8 编码解码
+        # 对tensorflow解码
+        if isinstance(file_path, bytes):
+            file_path = file_path.decode("utf-8")
+        elif isinstance(file_path, tf.string):
+            file_path = file_path.numpy().decode("utf-8")
+        elif isinstance(file_path, str):
+            pass
+        else:
+            raise TypeError("file_path must be str,bytes or tf.string")
         # 加载音频文件
         warnings.filterwarnings("ignore", category=wavfile.WavFileWarning)  # 忽略元数据无法读取的警告
-
+        assert isinstance(file_path, str), "file_path must be str"
         # 用tensorflow自带的库
         audio_binary = tf.io.read_file(file_path)
         wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
-        # 将音频数据转换为 tf.float32 类型
-        wave = tf.cast(wave, dtype=tf.float32)
-        wave = tf.squeeze(wave, axis=-1)
+        wave = squeezing(wave)
         s_rate = tf.cast(s_rate, dtype=tf.float32)
         return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
     except Exception as e:
         print(f"Error loading audio file to channels: {e}")
-        sum_mfcc_frames = int(tf.floor((frame_length * num_win - frame_length) / 160)) + 1
+        sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
         return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
 
 
@@ -88,7 +114,7 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     """
     加载音频文件并划分通道，返回通道和标签。
     """
-    sum_mfcc_frames = floor((frame_length * num_win - frame_length) / 160) + 1
+    sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
 
     def py_load_and_split_audio(file_path_str, label_py):
         try:
@@ -120,7 +146,9 @@ def preprocess_dataset(file_paths: list[str], labels: list[str], frame_length=40
     # 创建初始 Dataset
     dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))
 
+
     # 应用 load_and_split_audio 函数
+    # from_tensor_slices方法下file_path为tf.string使用需要转换
     dataset = dataset.flat_map(lambda file_path, label:
                                tf.data.Dataset.from_tensor_slices(
                                    load_and_split_audio(file_path, label, frame_length, n_mfcc, num_win)
