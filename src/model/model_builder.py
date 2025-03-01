@@ -141,6 +141,7 @@ class CustomModel(tf.keras.Model):
         x = self.dense2(x)
         return x
 
+
 # 测试模型
 if __name__ == "__main__":
     input_shape = (32, 32, 3)

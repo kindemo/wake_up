@@ -30,7 +30,7 @@ def configure_gpu():
                 tf.config.experimental.set_memory_growth(gpu, True)
                 tf.config.experimental.set_virtual_device_configuration(
                     gpu,
-                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=12 * 1024)])
+                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=13 * 1024)])
                 print(f'Using GPU: {gpu}')
         except RuntimeError as e:
             print(f"Error configuring GPU: {e}")
@@ -44,13 +44,10 @@ def convert_to_16bit_wav(input_path, output_path):
     audio.export(output_path, format="wav")
 
 
-# Set the seed value for experiment reproducibility.
-seed = 42
-tf.random.set_seed(seed)
-np.random.seed(seed)
-
-Batch = 32     # 训练样本数量
-
+Batch = 5     # 训练样本数量
+epochs = 25
+# 设定一个固定的 buffer_size
+buffer_size = 5120   # 缓冲区大小设定为 5120
 
 
 if __name__ == "__main__":
@@ -58,30 +55,43 @@ if __name__ == "__main__":
     configure_gpu()     # 启用gpu,动态分配内存
     # tf.profiler.experimental.start('log_dir')
 
+    # data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
+    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
 
-    data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
-    # data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
 
     # 跟踪张量形状变化
     # tf.debugging.set_log_device_placement(True)
 
     file_paths, labels = load_dataset(data_dir)  # 加载模型训练文件
-    dataset, label = preprocess_dataset(file_paths, labels)   # 加載自定義預處理
-    label_names = ["1_wake" if x == 1 else "0_non_wake" for x in label]
+    dataset = create_interleaved_dataset(file_paths, labels)
+
+    # # 打印前几个元素验证标签分配
+    # for element in dataset.take(15):
+    #     file_path, label = element
+    #     print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
+
+
+    dataset, label = preprocess_dataset(dataset)   # 加載自定義預處理
+    # label_names = ["1_wake" if x == 1 else "0_non_wake" for x in label]
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
     #     print("数据加载完成，第一个批次：", batch)
 
 
-    # 设定一个固定的 buffer_size
-    buffer_size = 512   # 例如，设定为 512
-
-    # 打乱数据集
-    dataset = dataset.shuffle(buffer_size=buffer_size, seed=42)  # 设置随机种子以保证可复现性
-
     # 划分为训练集和验证集
-    train_size = int(len(file_paths) * 0.8)
+    # 尝试获取 cardinality
+    cardinality = dataset.cardinality().numpy()
+    if cardinality == tf.data.UNKNOWN_CARDINALITY:
+        # 手动计算大小
+        total_size = sum(1 for _ in dataset)
+    elif cardinality == tf.data.INFINITE_CARDINALITY:
+        raise ValueError("数据集无限，无法划分")
+    else:
+        total_size = cardinality
+        print(f"total size: {total_size}")
+
+    train_size = int(total_size * 0.8)
     train_ds = dataset.take(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
     val_ds = dataset.skip(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
 
@@ -111,6 +121,11 @@ if __name__ == "__main__":
     train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
     val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
 
+    # 打印前几个元素验证标签分配
+    for element in train_ds_four.take(1):
+        slices, label = element
+        print(f"batch slices: {tf.shape(slices).numpy()}, Label: {label.numpy()}")
+
     print("expand train Audio element spec:", train_ds_four.element_spec)
     print("expand Validation dataset element spec:", val_ds_four.element_spec)
 
@@ -130,7 +145,6 @@ if __name__ == "__main__":
     compile_model(model, weights)
 
     # 训练模型
-    epochs = 20
     callbacks = [
         CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
@@ -160,17 +174,15 @@ if __name__ == "__main__":
 
 
     # 取出频谱数据(一个批次必须大于9)
-    # (25, 13)
-    for e_g_spectrograms, example_spect_labels in train_ds_four.take(1):
+    # (batch, 26, 13) 三维
+    for e_g_spectrograms, example_spect_labels in train_ds.take(1):
         # example_audio.shape: (10, 16000)
-        print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
-        print(f"example_spect_labels.shape: {example_spect_labels.shape}")
+        # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
+        # print(f"example_spect_labels.shape: {example_spect_labels.shape}")
         # 绘制前九张的频谱图
-        plot_spectrograms(e_g_spectrograms, example_spect_labels, label_names, rows=3, cols=3, figsize=(16, 9))
-
-        input_shape = e_g_spectrograms.shape[1:]
+        plot_spectrograms(e_g_spectrograms, example_spect_labels, rows=3, cols=3, figsize=(16, 9))
+        input_shape = e_g_spectrograms.shape
         print('Input shape:', input_shape)
-        num_labels = len(label_names)
         break
 
 
@@ -210,9 +222,9 @@ if __name__ == "__main__":
     y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
     # 真实标签
     y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
-    # print("True labels:", y_true)
-    # print("Predicted value:", y_pred)
-    # print("Predicted labels:", y_pred_class)
+    print("True labels:", y_true)
+    print("Predicted value:", y_pred)
+    print("Predicted labels:", y_pred_class)
 
     confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
     plt.figure(figsize=(10, 8))
@@ -226,6 +238,12 @@ if __name__ == "__main__":
 
     # 结束性能分析
     # tf.profiler.experimental.stop()
+
+
+
+
+
+
 
 
 

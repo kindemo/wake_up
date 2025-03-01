@@ -4,6 +4,7 @@ import tensorflow as tf
 
 
 #mfcc流 (时间步, 帧内采样点, [通道数量]) -> (通道数量, 时间步, n_mfcc)
+# @tf.function(jit_compile=True)
 def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_windows=11, fft_length=512, num_mel_bins=40,
              lower_frequency=100, upper_frequency=4000):
     """
@@ -68,12 +69,13 @@ def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_window
     return mfccs
 
 
+
+
 class TestGetMFCC(unittest.TestCase):
     def test_single_channel_input(self):
         """测试单通道输入"""
-        waveform = np.random.randn(11, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
+        waveform = np.random.randn(11, 400).astype(np.float32)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
         n_mfcc = 13
-
         result = get_mfcc(waveform, n_mfcc=n_mfcc)
 
         # 验证输出形状
@@ -87,9 +89,6 @@ class TestGetMFCC(unittest.TestCase):
         self.assertFalse(np.iscomplexobj(result), "输出包含复数")
         # 对于静态张量，直接使用 numpy 的方法来检查是否为有限值
         self.assertTrue(np.all(np.isfinite(result.numpy())))
-
-
-
 
     # def test_multi_channel_input(self):
     #     """测试多通道输入"""

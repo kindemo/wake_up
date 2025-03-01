@@ -28,27 +28,15 @@ def get_windows(waveform: tf.Tensor,
 
     # 计算最小所需长度（使用整数运算）
     min_required_length = (num_windows - 1) * frame_step + frame_length
-    min_required_length = tf.cast(min_required_length, tf.int32)
     original_length = tf.shape(waveform)[0]
 
     # 动态检查输入长度
-    with tf.control_dependencies([
-        tf.debugging.assert_greater_equal(
-            original_length,
-            min_required_length,
-            message=f"Input too short: needs {min_required_length} samples")
-    ]):
-        waveform = tf.identity(waveform)
+    tf.debugging.assert_greater_equal(
+        original_length,
+        min_required_length,
+        message=f"Input too short: needs {min_required_length} samples")
 
-    def calculate_frames(wave_len):
-        return tf.cast(
-            tf.math.ceil(
-                (tf.cast(wave_len, tf.float32) - tf.cast(frame_length, tf.float32)) / tf.cast(frame_step, tf.float32)
-            ),
-            tf.int32
-        ) + 1
-
-    num_frames = calculate_frames(original_length)
+    num_frames = (original_length - frame_length) // frame_step + 1
     total_length = (num_frames - 1) * frame_step + frame_length
 
     # 修正2：确保填充量为整数类型
@@ -64,13 +52,10 @@ def get_windows(waveform: tf.Tensor,
     num_windows_available = (num_frames_actual - num_windows) // window_stride + 1
 
     # 检查窗口数量有效性
-    with tf.control_dependencies([
-        tf.debugging.assert_greater_equal(
-            num_windows_available,
-            1,
-            message="Not enough frames to create windows")
-    ]):
-        frames = tf.identity(frames)
+    tf.debugging.assert_greater_equal(
+        num_windows_available,
+        1,
+        message="Not enough frames to create windows")
 
     start_indices = window_stride * tf.range(num_windows_available, dtype=tf.int32)
     window_indices = start_indices[:, tf.newaxis] + tf.range(num_windows, dtype=tf.int32)[tf.newaxis, :]

@@ -24,6 +24,8 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     wave = tf.cast(wave, dtype=tf.float32)
     s_rate = tf.cast(s_rate, dtype=tf.float32)
 
+    # wave = del_signal_ini(s_rate, wave)  # 降噪端点检测
+
     # try:
     #     # 假设 wave 是一个 TensorFlow 张量
     #     # 将音频数据转换为 tf.float32 类型
@@ -140,14 +142,16 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     return channels, labels
 
 
-def preprocess_dataset(file_paths: list[str], labels: list[str], frame_length=400, n_mfcc=13, num_win=11):
+def preprocess_dataset(dataset, frame_length=400, n_mfcc=13, num_win=11):
     """
     预处理数据集，加载并划分音频文件。
     返回: 数据集
     """
-    # 创建初始 Dataset
-    dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))
+    # # 创建初始 Dataset
+    # dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))
 
+    # 使用 map 提取标签
+    label_dataset = dataset.map(lambda _, label: label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # 应用 load_and_split_audio 函数
     # from_tensor_slices方法下file_path为tf.string使用需要转换
@@ -156,7 +160,7 @@ def preprocess_dataset(file_paths: list[str], labels: list[str], frame_length=40
                                    load_and_split_audio(file_path, label, frame_length, n_mfcc, num_win)
                                )
                                )
-    return dataset, labels
+    return dataset, label_dataset
 
 
 class TestLoadAndSplitAudio(unittest.TestCase):

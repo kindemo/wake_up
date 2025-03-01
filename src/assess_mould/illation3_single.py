@@ -65,7 +65,8 @@ loaded_model = tf.saved_model.load(model_path)
 
 # 准备测试音频路径
 data_dir = Path("D:/PycharmProjects/wark_by_voice/verify")
-audio_file_path = str(data_dir / '1_wake/c_ya_slow_2_10_3_quiet.wav')
+# audio_file_path = str(data_dir / '1_wake/c_ya_slow_2_10_3_quiet.wav')
+audio_file_path = str(data_dir / '0_non_wake/22 研究工作实验室.wav')
 
 # 直接调用模型处理输入（传入文件路径）
 input_data = tf.constant(audio_file_path, dtype=tf.string)
@@ -83,7 +84,7 @@ time_axis = [i * time_step for i in range(class_ids.shape[0])]
 stacked_result = list(zip(time_axis, class_ids))
 
 print("Predictions:\n", predictions)
-print("Class IDs per window:\n", class_ids)
+# print("Class IDs per window:\n", class_ids)
 # print("Time and Class IDs:\n", stacked_result)
 # 格式化输出
 print("Time\tClass ID")

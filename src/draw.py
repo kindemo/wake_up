@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from src.preprocessing.Spectrum_processing import plot_spectrogram
 import numpy as np
 
-def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize=(16, 9)):
+def plot_spectrograms(spectrograms, labels, rows=3, cols=3, figsize=(16, 9)):
     """
     绘制频谱图的函数。
 
@@ -17,7 +17,7 @@ def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize
     n = rows * cols
     fig, axes = plt.subplots(rows, cols, figsize=figsize)
 
-    for i in range(n):
+    for i in range(min(n, labels.shape[0])):
         r = i // cols
         c = i % cols
         ax = axes[r][c]
@@ -27,8 +27,7 @@ def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize
         # print(f"Spectrogram {i} shape: {spectrograms.shape}")
 
         # 设置标题
-        label_index = labels[i].numpy()
-        label_name = label_names[label_index]
+        label_name =(lambda x: '0_non_wake' if x == 0 else '1_wake')(labels[i].numpy())
         ax.set_title(label_name)
 
     plt.tight_layout()
@@ -36,7 +35,7 @@ def plot_spectrograms(spectrograms, labels, label_names, rows=3, cols=3, figsize
 
 
 # 绘制取出的前九个音频波形
-def plot_audio_waveforms(audio_signals, labels, label_names, rows=3, cols=3, figsize=(16, 10)):
+def plot_audio_waveforms(audio_signals, labels, rows=3, cols=3, figsize=(16, 10)):
     n = rows * cols
     plt.figure(figsize=figsize)
 
@@ -44,8 +43,7 @@ def plot_audio_waveforms(audio_signals, labels, label_names, rows=3, cols=3, fig
         plt.subplot(rows, cols, i + 1)
         audio_signal = audio_signals[i]
         plt.plot(audio_signal)  # 绘制音频信号的波形图
-        label_index = labels[i]
-        label_name = label_names[label_index]
+        label_name = (lambda x: '0_non_wake' if x == 0 else '1_wake')(labels[i].numpy())
         plt.title(label_name)
         plt.yticks(np.arange(-1.2, 1.2, 0.2))
         plt.ylim([-1.1, 1.1])
