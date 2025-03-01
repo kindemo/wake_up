@@ -12,7 +12,7 @@ def load_dataset(dataset_path: str):
     ], [0, 1]
 
 
-def create_interleaved_dataset(folder_paths, labels):
+def create_interleaved_dataset(folder_paths, labels, block_size = 8):
     # 创建文件夹路径和标签的数据集
     folders_ds = tf.data.Dataset.from_tensor_slices((folder_paths, labels))
 
@@ -20,9 +20,10 @@ def create_interleaved_dataset(folder_paths, labels):
     dataset = folders_ds.interleave(
         lambda folder_path, label: tf.data.Dataset.list_files(folder_path + '/*.wav').map(lambda x: (x, label)),
         cycle_length=2,
-        block_length=8,
+        block_length=block_size,
         num_parallel_calls=tf.data.AUTOTUNE
     )
+
     # Set the seed value for experiment reproducibility.
     seed = 42
     tf.random.set_seed(seed)

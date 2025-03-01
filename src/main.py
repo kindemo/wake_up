@@ -44,8 +44,9 @@ def convert_to_16bit_wav(input_path, output_path):
     audio.export(output_path, format="wav")
 
 
-Batch = 5     # 训练样本数量
-epochs = 25
+Batch = 128     # 训练样本数量
+epochs = 15
+f_block = 32     # 每次从一类文件中取出几个
 # 设定一个固定的 buffer_size
 buffer_size = 5120   # 缓冲区大小设定为 5120
 
@@ -55,15 +56,16 @@ if __name__ == "__main__":
     configure_gpu()     # 启用gpu,动态分配内存
     # tf.profiler.experimental.start('log_dir')
 
-    # data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
-    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
+    data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
+    # data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
+    # data_dir = "D:/PycharmProjects/wark_by_voice/verify"
 
 
     # 跟踪张量形状变化
     # tf.debugging.set_log_device_placement(True)
 
     file_paths, labels = load_dataset(data_dir)  # 加载模型训练文件
-    dataset = create_interleaved_dataset(file_paths, labels)
+    dataset = create_interleaved_dataset(file_paths, labels, block_size=f_block)
 
     # # 打印前几个元素验证标签分配
     # for element in dataset.take(15):
@@ -108,8 +110,8 @@ if __name__ == "__main__":
     norm_layer = normalize_data(train_ds, val_ds)
     train_ds, val_ds = preprocess_data(train_ds, val_ds, norm_layer)
 
-    print(f"norm Audio shape: {train_ds.element_spec[0].shape}")
-    print(f"norm Label shape: {train_ds.element_spec[1].shape}")
+    # print(f"norm Audio shape: {train_ds.element_spec[0].shape}")
+    # print(f"norm Label shape: {train_ds.element_spec[1].shape}")
 
     # 扩展维度到四维便于卷积输出
     # 定义一个函数来扩展维度
@@ -129,7 +131,7 @@ if __name__ == "__main__":
     print("expand train Audio element spec:", train_ds_four.element_spec)
     print("expand Validation dataset element spec:", val_ds_four.element_spec)
 
-    print("卷积输入维度扩展完成")
+    print("卷积输入维度扩展定义完成")
 
     # # 强制加载所有数据
     # all_data = list(dataset)  # 将所有数据加载到内存
@@ -222,9 +224,9 @@ if __name__ == "__main__":
     y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
     # 真实标签
     y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
-    print("True labels:", y_true)
-    print("Predicted value:", y_pred)
-    print("Predicted labels:", y_pred_class)
+    # print("True labels:", y_true)
+    # print("Predicted value:", y_pred)
+    # print("Predicted labels:", y_pred_class)
 
     confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
     plt.figure(figsize=(10, 8))

@@ -32,13 +32,14 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
     :return: 去除两端静音的音频信号
     """
     # 将信号分帧（必须为int64类型)
-    frames = tf.signal.frame(signal, frame_length=frame_length, frame_step=hop_length, pad_end=True)
+    frames = tf.signal.frame(signal, frame_length=frame_length, frame_step=hop_length, pad_end=False)
     frame_length = tf.cast(frame_length, tf.int64)
     hop_length = tf.cast(hop_length, tf.int64)
 
     # 计算每一帧的短时能量和过零率
     energy = short_time_energy(frames)
     zcr = zero_crossing_rate(frames)
+    assert energy.shape == zcr.shape
 
     # 第一级判决：基于高能量阈值找到粗略的语音段
     energy_threshold *= tf.reduce_max(energy)
@@ -46,10 +47,15 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
 
     # print(f"energy:{energy}, energy_threshold:{energy_threshold}")
     # print(f"帧总长度：{energy.shape}")
-
+    energy_size = tf.cast(tf.size(energy), tf.int64)
     start = tf.argmax(tf.cast(energy_high, tf.int64))  # 找到第一个满足能量阈值的帧
-    end = tf.cast(tf.size(energy_high), tf.int64) - tf.argmax(tf.reverse(tf.cast(energy_high, tf.int64), axis=[0]),
-                                                              output_type=tf.int64) - 1
+    end = energy_size - tf.argmax(tf.reverse(energy_high, axis=[0]), output_type=tf.int64) - 1
+    assert start < energy_size, "索引开始必须小于音频末尾"
+
+    signal_length = tf.cast(tf.shape(signal)[0], tf.int64)
+    start = tf.minimum(tf.maximum(start, 0), energy_size - 1)
+    end = tf.minimum(tf.maximum(end, 0), energy_size - 1)
+
     # print(f"满足能量帧范围：{start}->{end}")
     zcr_hold = zcr_threshold * tf.reduce_max(zcr[start:end+1])
 
@@ -57,31 +63,71 @@ def endpoint_detection(signal, frame_length, hop_length, energy_threshold, zcr_t
     # print(f"zcr:{zcr}. zcr_hold:{zcr_hold}")
 
     # 第二级判决：从粗略的语音段向两侧扩展，结合低能量和过零率
-    # 第二级判决：从粗略的语音段向两侧扩展，结合低能量和过零率
     def expand_start(start):
-        condition = start > 0 and (energy[start - 1] > energy_threshold or
-                                   (zcr[start - 1] > zcr_hold and energy[start - 1] > 0.2 * energy_threshold))
-        return tf.cond(condition, lambda: expand_start(start - 1), lambda: start)
+        start = tf.convert_to_tensor(start, dtype=tf.int64)  # 确保是张量
+
+        def cond(current_start):
+            return tf.logical_and(
+                tf.greater(current_start, 0),
+                tf.logical_or(
+                    energy[current_start - 1] > energy_threshold,
+                    tf.logical_and(
+                        zcr[current_start - 1] > zcr_hold,
+                        energy[current_start - 1] > 0.2 * energy_threshold
+                    )
+                )
+            )
+
+        def body(current_start):
+            return [current_start - 1]  # 返回列表以保持结构一致
+
+        # 初始 loop_vars 必须是一个列表
+        current_start = tf.while_loop(
+            cond=cond,
+            body=body,
+            loop_vars=[start],  # 传入列表
+            maximum_iterations=tf.size(energy),
+            shape_invariants=[tf.TensorShape([])]  # 标量形状
+        )
+        return current_start[0]  # 提取标量值
 
     def expand_end(end):
-        energy_size = tf.cast(tf.size(energy), tf.int64)
-        condition = end < energy_size - 1 and (energy[end + 1] > energy_threshold or
-                                               (zcr[end + 1] > zcr_hold and energy[end + 1] > 0.2 * energy_threshold))
-        return tf.cond(condition, lambda: expand_end(end + 1), lambda: end)
+        end = tf.convert_to_tensor(end, dtype=tf.int64)  # 确保是张量
 
+        def cond(current_end):
+            return tf.logical_and(
+                tf.less(current_end, energy_size - 1),
+                tf.logical_or(
+                    energy[current_end + 1] > energy_threshold,
+                    tf.logical_and(
+                        zcr[current_end + 1] > zcr_hold,
+                        energy[current_end + 1] > 0.2 * energy_threshold
+                    )
+                )
+            )
+
+        def body(current_end):
+            return [current_end + 1]  # 返回列表以保持结构一致
+
+        current_end = tf.while_loop(
+            cond=cond,
+            body=body,
+            loop_vars=[end],  # 传入列表
+            maximum_iterations=energy_size,
+            shape_invariants=[tf.TensorShape([])]  # 标量形状
+        )
+        return current_end[0]
 
     start = expand_start(start)
     end = expand_end(end)
 
-    # 计算语音段的起始和结束样本索引
-    start_sample = start * hop_length
-    end_sample = end * hop_length + frame_length
+    start_sample = tf.clip_by_value(start * hop_length, 0, signal_length)
+    end_sample = tf.clip_by_value(end * hop_length + frame_length, 0, signal_length)
+
+    trimmed_signal = signal[start_sample: end_sample]
     # print(f"扩展后长度范围：{start}->{end}\n")
 
-    # 提取语音段
-    trimmed_signal = signal[start_sample:end_sample]
     return trimmed_signal
-
 
 def del_signal_ini(sr, data):
     """
@@ -198,7 +244,7 @@ class TestDelSignalIni(tf.test.TestCase):
 
 
     def test_endpoint_detection_file(self):
-        # 创建一个测试信号（包含静音段和语音段）
+        # 创建一个测试信号
 
         # file_path = "D:/PycharmProjects/wark_by_voice/verify/0_non_wake/在木地板上翻滚-YS070515.wav"
         file_path = "D:/PycharmProjects/wark_by_voice/verify/1_wake/c_ya_mid_2_10_2_noisy.wav"

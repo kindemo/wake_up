@@ -59,14 +59,17 @@
 import tensorflow as tf
 from pathlib import Path
 
+from matplotlib import pyplot as plt
+
 # 加载导出的模型（包含预处理）
 model_path = "D:/PycharmProjects/wark_by_voice/saved"
 loaded_model = tf.saved_model.load(model_path)
 
 # 准备测试音频路径
-data_dir = Path("D:/PycharmProjects/wark_by_voice/verify")
-# audio_file_path = str(data_dir / '1_wake/c_ya_slow_2_10_3_quiet.wav')
-audio_file_path = str(data_dir / '0_non_wake/22 研究工作实验室.wav')
+# data_dir = Path("D:/PycharmProjects/wark_by_voice/verify")
+data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
+audio_file_path = str(data_dir / '1_wake/miya_long3.wav')
+# audio_file_path = str(data_dir / '0_non_wake/22 研究工作实验室.wav')
 
 # 直接调用模型处理输入（传入文件路径）
 input_data = tf.constant(audio_file_path, dtype=tf.string)
@@ -83,13 +86,28 @@ time_axis = [i * time_step for i in range(class_ids.shape[0])]
 # 组合结果
 stacked_result = list(zip(time_axis, class_ids))
 
-print("Predictions:\n", predictions)
-# print("Class IDs per window:\n", class_ids)
-# print("Time and Class IDs:\n", stacked_result)
-# 格式化输出
-print("Time\tClass ID")
-print("-" * 20)
-for time, class_id in stacked_result:
-    # 将 numpy 数组转换为普通的 Python 列表并取第一个元素
-    class_id = class_id.tolist()[0]
-    print(f"{time:.3f}\t{class_id}")
+# print("Predictions:\n", predictions)
+# # print("Class IDs per window:\n", class_ids)
+# # print("Time and Class IDs:\n", stacked_result)
+# # 格式化输出
+# print("Time\tClass ID")
+# print("-" * 20)
+# for time, class_id in stacked_result:
+#     # 将 numpy 数组转换为普通的 Python 列表并取第一个元素
+#     class_id = class_id.tolist()[0]
+#     print(f"{time:.3f}\t{class_id}")
+
+
+# 绘制图像
+plt.figure(figsize=(10, 6))  # 设置图像大小
+plt.plot(time_axis, predictions, label='Predictions', color='blue')  # 绘制预测结果曲线
+plt.axhline(y=0.5, color='red', linestyle='--', label='Threshold (y=0.5)')  # 在 y=0.5 处画一条红色虚线
+
+# 添加图表标题和标签
+plt.title('Model Predictions Over Time', fontsize=14)
+plt.xlabel('Time (s)', fontsize=12)
+plt.ylabel('Predictions', fontsize=12)
+plt.legend()  # 显示图例
+plt.grid(True)  # 显示网格
+plt.tight_layout()  # 自动调整子图参数，使之填充整个图像区域
+plt.show()  # 显示图像

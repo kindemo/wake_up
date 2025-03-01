@@ -21,10 +21,10 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     :param num_win:
     :return: 返回形状为 (num_channels, 26, 13) 的张量。
     """
-    wave = tf.cast(wave, dtype=tf.float32)
+    data = tf.cast(wave, dtype=tf.float32)
     s_rate = tf.cast(s_rate, dtype=tf.float32)
 
-    # wave = del_signal_ini(s_rate, wave)  # 降噪端点检测
+    # waveform = del_signal_ini(s_rate, data)  # 降噪端点检测
 
     # try:
     #     # 假设 wave 是一个 TensorFlow 张量
@@ -51,6 +51,7 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
 
     # 将数据归一化到 [-1.0, 1.0]
     waveform = data / (tf.reduce_max(tf.abs(data)) + 1e-6)
+
 
     try:
         # 进行无重叠拼帧
@@ -89,29 +90,25 @@ def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):
     将音频张量划分为多个通道，每个通道的形状为 (26, 13)。
     返回形状为 (num_channels, 26, 13) 的张量。
     """
-    try:
-        # 对tensorflow解码
-        if isinstance(file_path, bytes):
-            file_path = file_path.decode("utf-8")
-        elif isinstance(file_path, tf.string):
-            file_path = file_path.numpy().decode("utf-8")
-        elif isinstance(file_path, str):
-            pass
-        else:
-            raise TypeError("file_path must be str,bytes or tf.string")
-        # 加载音频文件
-        warnings.filterwarnings("ignore", category=wavfile.WavFileWarning)  # 忽略元数据无法读取的警告
-        assert isinstance(file_path, str), "file_path must be str"
-        # 用tensorflow自带的库
-        audio_binary = tf.io.read_file(file_path)
-        wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
-        wave = squeezing(wave)
-        s_rate = tf.cast(s_rate, dtype=tf.float32)
-        return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
-    except Exception as e:
-        print(f"Error loading audio file to channels: {e}")
-        sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
-        return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
+    # 对tensorflow解码
+    if isinstance(file_path, bytes):
+        file_path = file_path.decode("utf-8")
+    elif isinstance(file_path, tf.string):
+        file_path = file_path.numpy().decode("utf-8")
+    elif isinstance(file_path, str):
+        pass
+    else:
+        raise TypeError("file_path must be str,bytes or tf.string")
+    # 加载音频文件
+    warnings.filterwarnings("ignore", category=wavfile.WavFileWarning)  # 忽略元数据无法读取的警告
+    assert isinstance(file_path, str), "file_path must be str"
+    # 用tensorflow自带的库
+    audio_binary = tf.io.read_file(file_path)
+    wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
+    wave = squeezing(wave)
+    s_rate = tf.cast(s_rate, dtype=tf.float32)
+    return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
+
 
 
 def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=11):
@@ -121,16 +118,12 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     sum_mfcc_frames = int((frame_length * num_win - frame_length) / 160 + 1)
 
     def py_load_and_split_audio(file_path_str, label_py):
-        try:
-            channels = loading_file2channels(file_path_str, frame_length, n_mfcc, num_win)
-            # ！此处不能扩展维度
-            num_channels = channels.shape[0]
-            labels = tf.repeat(label_py, num_channels)
-            # print(f"channels shape: {channels.shape}, labels: {labels}")
-            return channels, labels
-        except Exception as e:
-            print(f"Error processing file when tf.function{file_path_str}: {e}")
-            return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32), tf.zeros(1, dtype=tf.int32)
+        channels = loading_file2channels(file_path_str, frame_length, n_mfcc, num_win)
+        # ！此处不能扩展维度
+        num_channels = channels.shape[0]
+        labels = tf.repeat(label_py, num_channels)
+        # print(f"channels shape: {channels.shape}, labels: {labels}")
+        return channels, labels
 
     channels, labels = tf.numpy_function(
         py_load_and_split_audio,
