@@ -106,38 +106,38 @@ class CustomModel(tf.keras.Model):
 
         self.input_layer = layers.InputLayer(input_shape=input_shape)
         self.bn = layers.BatchNormalization()
-        self.conv = layers.Conv2D(16, 3, kernel_regularizer=l2_reg)
+        # 保持时间维度
+        self.conv = layers.Conv2D(16, 3, padding='same',kernel_regularizer=l2_reg)
+        self.max_pool_1_time = layers.MaxPooling2D(pool_size=(2, 1))  # 仅压缩时间维度26->13
+        self.res_block1 = ResidualBlock(filters=32, kernel_size=3, stride=1, l2_reg=l2_reg)
         self.dropout = layers.Dropout(0.3)
-        self.max_pool = layers.MaxPooling2D()
+        self.res_block2 = ResidualBlock(filters=64, kernel_size=3, stride=1, l2_reg=l2_reg)
+        # self.freq_pool = layers.Lambda(lambda x: tf.reduce_mean(x, axis=2)) # 沿频率维度池化 → (batch, 13, 1)
 
-        self.res_block1 = ResidualBlock(filters=8, kernel_size=3, stride=1, l2_reg=l2_reg)
-        self.res_block2 = ResidualBlock(filters=16, kernel_size=3, stride=2, l2_reg=l2_reg)
-
-        self.gru = layers.GRU(20, return_sequences=True, kernel_regularizer=l2_reg)
-        self.attention = SelfAttention(embed_dim=16)
-        self.lambda_layer = layers.Lambda(lambda x: x[:, -1, :])
+        self.gru = layers.GRU(64, return_sequences=True, kernel_regularizer=l2_reg)
+        self.attention = SelfAttention(embed_dim=64)
         self.dense1 = layers.Dense(16, kernel_regularizer=l2_reg)
+        self.fin_dropout = layers.Dropout(0.5)
         self.dense2 = layers.Dense(1, activation='sigmoid')
+
 
     def call(self, inputs, training=None, mask=None):
         x = self.input_layer(inputs)
-        x = self.bn(x, training=training)
+        x = self.bn(x)
         x = self.conv(x)
-        x = self.dropout(x, training=training)
-
+        x = self.max_pool_1_time(x)
         x = self.res_block1(x)
+        x = self.dropout(x)
         x = self.res_block2(x)
-
-        x = self.max_pool(x)
-        x = self.dropout(x, training=training)
 
         batch_size = tf.shape(x)[0]
         x = tf.reshape(x, [batch_size, -1, tf.shape(x)[-1]])  # 更通用的reshape方式
 
         x = self.gru(x)
         x = self.attention(x)
-        x = self.lambda_layer(x)
+        x = layers.GlobalAveragePooling1D()(x)
         x = self.dense1(x)
+        x = self.fin_dropout(x)
         x = self.dense2(x)
         return x
 

@@ -67,9 +67,10 @@ loaded_model = tf.saved_model.load(model_path)
 
 # 准备测试音频路径
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/verify")
-data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
-audio_file_path = str(data_dir / '1_wake/miya_long3.wav')
-# audio_file_path = str(data_dir / '0_non_wake/22 研究工作实验室.wav')
+# data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
+data_dir = Path("D:/PycharmProjects/wark_by_voice")
+audio_file_path = str(data_dir / '3月3日-上午9点29分.yp 1 11 16 35.wav')
+
 
 # 直接调用模型处理输入（传入文件路径）
 input_data = tf.constant(audio_file_path, dtype=tf.string)

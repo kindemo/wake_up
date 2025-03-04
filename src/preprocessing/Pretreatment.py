@@ -6,7 +6,6 @@ import scipy.io.wavfile as wavfile
 import tensorflow as tf
 
 from src.preprocessing.Spectrum_processing import get_mfcc
-from src.preprocessing.del_signal import del_signal_ini
 from src.preprocessing.windowing import get_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
 
@@ -21,25 +20,6 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     :param num_win:
     :return: 返回形状为 (num_channels, 26, 13) 的张量。
     """
-    data = tf.cast(wave, dtype=tf.float32)
-    s_rate = tf.cast(s_rate, dtype=tf.float32)
-
-    # waveform = del_signal_ini(s_rate, data)  # 降噪端点检测
-
-    # try:
-    #     # 假设 wave 是一个 TensorFlow 张量
-    #     # 将音频数据转换为 tf.float32 类型
-    #     # 调用降噪和端点检测函数
-    #     waveform = del_signal_ini(s_rate, wave)  # 降噪端点检测
-    # except Exception as e:
-    #     print(f"Error deleting audio file: {e}")
-    #     try:
-    #         if 'waveform' in locals():
-    #             print("waveform 已被定义和赋值，其值为:", waveform)
-    #     except NameError:
-    #             print("waveform 未被定义和赋值")
-    #     waveform = tf.zeros(16000, dtype=tf.float32)
-
     # 先测试无端点检测
     # 确保输入类型
     data = tf.cast(wave, dtype=tf.float32)
@@ -51,7 +31,6 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
 
     # 将数据归一化到 [-1.0, 1.0]
     waveform = data / (tf.reduce_max(tf.abs(data)) + 1e-6)
-
 
     try:
         # 进行无重叠拼帧

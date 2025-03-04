@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from src.preprocessing.data_preprocessing import normalize_data, preprocess_data
 from src.model.model_builder import CustomModel
 from src.model.model_trainer import compile_model, train_model
@@ -45,8 +44,8 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 15
-f_block = 32     # 每次从一类文件中取出几个
+epochs = 10
+f_block = 16     # 每次从一类文件中取出几个
 # 设定一个固定的 buffer_size
 buffer_size = 5120   # 缓冲区大小设定为 5120
 
@@ -56,8 +55,8 @@ if __name__ == "__main__":
     configure_gpu()     # 启用gpu,动态分配内存
     # tf.profiler.experimental.start('log_dir')
 
-    data_dir = 'D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav'
-    # data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
+    # data_dir = "D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav"
+    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
     # data_dir = "D:/PycharmProjects/wark_by_voice/verify"
 
 
@@ -138,12 +137,12 @@ if __name__ == "__main__":
     # print("所有数据加载完成，数据总数：", len(all_data))
 
     # 模型构建
-    l2_reg = tf.keras.regularizers.L2(l2=0.035)
+    l2_reg = tf.keras.regularizers.L2(l2=0.02)
     # 此处根据实际情况调整 ！！！
     model = CustomModel((None, 26, 13, 1), 2, l2_reg)  # 输入形状应该是 (None, 26, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
-    weights = [1.05, 1.0]
+    weights = [1.02, 1.0]
     compile_model(model, weights)
 
     # 训练模型
