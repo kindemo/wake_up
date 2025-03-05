@@ -1,6 +1,6 @@
 from pathlib import Path
 from src.preprocessing.data_preprocessing import normalize_data, preprocess_data
-from src.model.model_builder import CustomModel
+from src.model.model_builder import EnhancedWakeModel
 from src.model.model_trainer import compile_model, train_model
 from src.model.utils import CustomEarlyStopping
 import seaborn as sns
@@ -46,8 +46,10 @@ def convert_to_16bit_wav(input_path, output_path):
 Batch = 128     # 训练样本数量
 epochs = 10
 f_block = 16     # 每次从一类文件中取出几个
+a_balance = 0.52        # 控制样本平衡
 # 设定一个固定的 buffer_size
 buffer_size = 5120   # 缓冲区大小设定为 5120
+
 
 
 if __name__ == "__main__":
@@ -73,7 +75,6 @@ if __name__ == "__main__":
 
 
     dataset, label = preprocess_dataset(dataset)   # 加載自定義預處理
-    # label_names = ["1_wake" if x == 1 else "0_non_wake" for x in label]
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
@@ -137,13 +138,12 @@ if __name__ == "__main__":
     # print("所有数据加载完成，数据总数：", len(all_data))
 
     # 模型构建
-    l2_reg = tf.keras.regularizers.L2(l2=0.02)
+    l2_reg = tf.keras.regularizers.L2(l2=0.01)
     # 此处根据实际情况调整 ！！！
-    model = CustomModel((None, 26, 13, 1), 2, l2_reg)  # 输入形状应该是 (None, 26, 13, 1)
+    model = EnhancedWakeModel((26, 13, 1), 2)  # 输入形状应该是 (26, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
-    weights = [1.02, 1.0]
-    compile_model(model, weights)
+    compile_model(model, a_balance)
 
     # 训练模型
     callbacks = [
@@ -156,22 +156,6 @@ if __name__ == "__main__":
     export = ExportModel(model)
     tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
     print("end")
-
-
-
-    # try:
-    #     audio_file_path = str(Path(data_dir)/ '1_wake_words/c_ya_slow_2_10_3_quiet.wav')
-    #     input_audio = tf.constant(audio_file_path, dtype=tf.string)
-    #     export(input_audio)
-    # except Exception as e:
-    #     print(f"An error occurred while exporting the model: {e}")
-    # finally:
-    #     tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
-    #     imported = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
-    #     # imported(waveform[tf.newaxis, :])
-    #     print("end")
-
-
 
 
     # 取出频谱数据(一个批次必须大于9)
@@ -242,64 +226,14 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
-# # 分割训练集和验证集(随机打乱方案)
-# train_size = int(len(file_paths) * 0.8)
-# train_ds = dataset.take(train_size)
-# val_ds = dataset.skip(train_size)
-#
-# # 应用 shuffle 和 cache
-# train_ds = train_ds.shuffle(buffer_size=4096).cache().batch(Batch).prefetch(tf.data.AUTOTUNE)
-# val_ds = val_ds.cache().batch(Batch).prefetch(tf.data.AUTOTUNE)
-
-
-
-
-# # 小验证
-# x = 'D:\\PycharmProjects\\wark_by_voice\\verify\\1_wake\\c_ya_fast_2_10_1_quiet.wav'
-#
-# # 将输入转换为16bit的音频
-# convert_to_16bit_wav(x, x)
-#
-# x = tf.io.read_file(str(x))
-# x, sample_rate = tf.audio.decode_wav(x, desired_channels=1, desired_samples=16000,)
-# x = tf.squeeze(x, axis=-1)
-# waveform = x
-# # x = get_spectrogram(x)      # 利用对数频谱图
-# x = get_mfcc(x)     # 利用mfcc特征图
-# x = x[tf.newaxis,...]   # 转化为批次的形式
-#
-# prediction = model(x)
-# print("prediction:", prediction)
-#
-# x_labels = ['wake_words_probability']
-# wake_word_probability = prediction.numpy()[0][0]  # 提取概率值
-# plt.bar(x_labels, [wake_word_probability])
-#
-# plt.title('miya')
-# plt.ylabel('Probability')
-# plt.show()
-#
-# display.display(display.Audio(waveform, rate=16000))
-
-
-
-# # 创建数据增强管道
-# data_augmentation = tf.keras.Sequential([
-#     layers.RandomRotation(0.2),  # 随机旋转
-#     layers.RandomZoom(0.2),  # 随机缩放
-#     layers.RandomTranslation(0.1, 0.1),  # 随机平移
-#     layers.RandomContrast(0.2)  # 随机对比度调整
-# ])
-# # 应用数据增强
-# train_spectrogram_ds = train_spectrogram_ds.map(
-#     lambda x, y: (data_augmentation(x, training=True), y),
-#     num_parallel_calls=tf.data.AUTOTUNE
-# )
-
+    # try:
+    #     audio_file_path = str(Path(data_dir)/ '1_wake_words/c_ya_slow_2_10_3_quiet.wav')
+    #     input_audio = tf.constant(audio_file_path, dtype=tf.string)
+    #     export(input_audio)
+    # except Exception as e:
+    #     print(f"An error occurred while exporting the model: {e}")
+    # finally:
+    #     tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+    #     imported = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
+    #     # imported(waveform[tf.newaxis, :])
+    #     print("end")

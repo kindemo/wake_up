@@ -68,6 +68,7 @@ def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_window
     return mfccs
 
 
+
 class TestGetMFCC(unittest.TestCase):
     def test_single_channel_input(self):
         """测试单通道输入"""

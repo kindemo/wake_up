@@ -66,7 +66,7 @@ model_path = "D:/PycharmProjects/wark_by_voice/saved"
 loaded_model = tf.saved_model.load(model_path)
 
 # 准备测试音频路径
-# data_dir = Path("D:/PycharmProjects/wark_by_voice/verify")
+# data_dir = Path("D:/PycharmProjects/wark_by_voice/verify/1_wake")
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
 data_dir = Path("D:/PycharmProjects/wark_by_voice")
 audio_file_path = str(data_dir / '3月3日-上午9点29分.yp 1 11 16 35.wav')
@@ -87,18 +87,6 @@ time_axis = [i * time_step for i in range(class_ids.shape[0])]
 # 组合结果
 stacked_result = list(zip(time_axis, class_ids))
 
-# print("Predictions:\n", predictions)
-# # print("Class IDs per window:\n", class_ids)
-# # print("Time and Class IDs:\n", stacked_result)
-# # 格式化输出
-# print("Time\tClass ID")
-# print("-" * 20)
-# for time, class_id in stacked_result:
-#     # 将 numpy 数组转换为普通的 Python 列表并取第一个元素
-#     class_id = class_id.tolist()[0]
-#     print(f"{time:.3f}\t{class_id}")
-
-
 # 绘制图像
 plt.figure(figsize=(10, 6))  # 设置图像大小
 plt.plot(time_axis, predictions, label='Predictions', color='blue')  # 绘制预测结果曲线
@@ -112,3 +100,17 @@ plt.legend()  # 显示图例
 plt.grid(True)  # 显示网格
 plt.tight_layout()  # 自动调整子图参数，使之填充整个图像区域
 plt.show()  # 显示图像
+
+
+
+
+# print("Predictions:\n", predictions)
+# # print("Class IDs per window:\n", class_ids)
+# # print("Time and Class IDs:\n", stacked_result)
+# # 格式化输出
+# print("Time\tClass ID")
+# print("-" * 20)
+# for time, class_id in stacked_result:
+#     # 将 numpy 数组转换为普通的 Python 列表并取第一个元素
+#     class_id = class_id.tolist()[0]
+#     print(f"{time:.3f}\t{class_id}")

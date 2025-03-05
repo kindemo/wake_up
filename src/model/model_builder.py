@@ -1,153 +1,86 @@
-from tensorflow.keras import layers, models
-from tensorflow.keras import regularizers
+from keras import Input
+from tensorflow.keras import Model, Sequential, layers
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, DepthwiseConv2D, Reshape
+from tensorflow.keras.layers import Conv1D, LayerNormalization, GRU, Dense, Dropout
+from tensorflow.keras.layers import Attention
 import tensorflow as tf
 
-class SelfAttention(layers.Layer):
-    """
-    Self-attention layer 注意力机制层
-    """
-    def __init__(self, embed_dim, **kwargs):
-        super(SelfAttention, self).__init__(**kwargs)
-        self.embed_dim = embed_dim
-        self.query = layers.Dense(embed_dim)
-        self.key = layers.Dense(embed_dim)
-        self.value = layers.Dense(embed_dim)
 
-    def call(self, inputs, training=None, mask=None):
-        q = self.query(inputs)
-        k = self.key(inputs)
-        v = self.value(inputs)
+class EnhancedWakeModel(Model):
+    def __init__(self, input_shape, l2_reg=1e-4):
+        super(EnhancedWakeModel, self).__init__()
 
-        attn_weights = tf.matmul(q, k, transpose_b=True)
-        attn_weights = tf.nn.softmax(attn_weights, axis=-1)
+        original_freq = input_shape[1]
+        pooled_freq = (original_freq + 1) // 2
 
-        if mask is not None:
-            attn_weights = attn_weights * mask
-            attn_weights = attn_weights / tf.reduce_sum(attn_weights, axis=-1, keepdims=True)
+        # 时频分支（添加降维层）
+        self.freq_conv = Sequential([
+            Input(shape=input_shape),
+            Conv2D(16, (3, 3), padding='same'),
+            MaxPooling2D((1, 2), padding='same'),
+            DepthwiseConv2D(3, depth_multiplier=4, padding='same'),
+            Reshape((-1, pooled_freq * 16 * 4)),  # 输出形状：(B,26,448)
+            Dense(64)  # 新增：将448维降为64维
+        ])
 
-        attended_values = tf.matmul(attn_weights, v)
-        return attended_values
+        # 时间分支保持不变
+        self.time_conv = Sequential([
+            Conv1D(64, 5, padding='causal'),
+            LayerNormalization(),
+            GRU(64, return_sequences=True)
+        ])
 
-    def get_config(self):
-        config = super().get_config()
-        config.update({"embed_dim": self.embed_dim})
-        return config
+        self.cross_attn = Attention(use_scale=True)
+        self.classifier = Sequential([
+            Dense(64, activation='swish'),
+            Dropout(0.3),
+            Dense(1, activation='sigmoid')
+        ])
 
+    def call(self, x):
+        f = self.freq_conv(x)  # 现在形状：(B,26,64)
+        t_input = tf.squeeze(x, axis=-1)
+        t = self.time_conv(t_input)  # 形状：(B,26,64)
 
-class ResidualBlock(layers.Layer):
-    """
-    Residual Block 残差神经网络层
-    """
-    def __init__(self, filters, kernel_size=3, stride=1, l2_reg=None, **kwargs):
-        super(ResidualBlock, self).__init__(**kwargs)
-        self.filters = filters
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.l2_reg = l2_reg
+        attended = self.cross_attn([f, t])  # 维度已匹配
+        pooled = tf.reduce_mean(attended, axis=1)
+        return self.classifier(pooled)
 
-        self.conv1 = layers.Conv2D(
-            filters, kernel_size, strides=stride, padding='same', kernel_regularizer=l2_reg
-        )
-        self.bn1 = layers.BatchNormalization()
-        self.act1 = layers.Activation('relu')
-        self.conv2 = layers.Conv2D(
-            filters, kernel_size, padding='same', kernel_regularizer=l2_reg
-        )
-        self.bn2 = layers.BatchNormalization()
-
-        self.shortcut = None
-        self.bn_shortcut = None
-
-    def build(self, input_shape):
-        input_channels = input_shape[-1]
-        if input_channels != self.filters or self.stride != 1:
-            self.shortcut = layers.Conv2D(
-                self.filters, 1, strides=self.stride, padding='same', kernel_regularizer=self.l2_reg
-            )
-            self.bn_shortcut = layers.BatchNormalization()
-        else:
-            self.shortcut = layers.Lambda(lambda x: x)
-            self.bn_shortcut = layers.Lambda(lambda x: x)
-        super(ResidualBlock, self).build(input_shape)
-
-    def call(self, inputs):
-        x = self.conv1(inputs)
-        x = self.bn1(x)
-        x = self.act1(x)
-
-        x = self.conv2(x)
-        x = self.bn2(x)
-
-        shortcut = self.shortcut(inputs)
-        shortcut = self.bn_shortcut(shortcut)
-
-        x = layers.Add()([x, shortcut])
-        x = layers.Activation('relu')(x)
-        return x
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "filters": self.filters,
-            "kernel_size": self.kernel_size,
-            "stride": self.stride,
-            "l2_reg": self.l2_reg
-        })
-        return config
-
-
-class CustomModel(tf.keras.Model):
-    """
-    模型的主要结构
-    """
-    def __init__(self, input_shape, num_labels, l2_reg):
-        super().__init__()
-        self.l2_reg = l2_reg
-
-        self.input_layer = layers.InputLayer(input_shape=input_shape)
-        self.bn = layers.BatchNormalization()
-        # 保持时间维度
-        self.conv = layers.Conv2D(16, 3, padding='same',kernel_regularizer=l2_reg)
-        self.max_pool_1_time = layers.MaxPooling2D(pool_size=(2, 1))  # 仅压缩时间维度26->13
-        self.res_block1 = ResidualBlock(filters=32, kernel_size=3, stride=1, l2_reg=l2_reg)
-        self.dropout = layers.Dropout(0.3)
-        self.res_block2 = ResidualBlock(filters=64, kernel_size=3, stride=1, l2_reg=l2_reg)
-        # self.freq_pool = layers.Lambda(lambda x: tf.reduce_mean(x, axis=2)) # 沿频率维度池化 → (batch, 13, 1)
-
-        self.gru = layers.GRU(64, return_sequences=True, kernel_regularizer=l2_reg)
-        self.attention = SelfAttention(embed_dim=64)
-        self.dense1 = layers.Dense(16, kernel_regularizer=l2_reg)
-        self.fin_dropout = layers.Dropout(0.5)
-        self.dense2 = layers.Dense(1, activation='sigmoid')
-
-
-    def call(self, inputs, training=None, mask=None):
-        x = self.input_layer(inputs)
-        x = self.bn(x)
-        x = self.conv(x)
-        x = self.max_pool_1_time(x)
-        x = self.res_block1(x)
-        x = self.dropout(x)
-        x = self.res_block2(x)
-
-        batch_size = tf.shape(x)[0]
-        x = tf.reshape(x, [batch_size, -1, tf.shape(x)[-1]])  # 更通用的reshape方式
-
-        x = self.gru(x)
-        x = self.attention(x)
-        x = layers.GlobalAveragePooling1D()(x)
-        x = self.dense1(x)
-        x = self.fin_dropout(x)
-        x = self.dense2(x)
-        return x
 
 
 # 测试模型
 if __name__ == "__main__":
-    input_shape = (32, 32, 3)
-    num_labels = 10
-    l2_reg = regularizers.L2(0.01)
+    # 单元测试代码
+    def test_reshape_dimension():
+        input_shape = (26, 13, 1)
+        model = EnhancedWakeModel(input_shape)
 
-    model = CustomModel(input_shape=input_shape, num_labels=num_labels, l2_reg=l2_reg)
-    model.build(input_shape=(None, *input_shape))
+        # 模拟输入
+        test_input = tf.random.normal(shape=(32, 26, 13, 1))
+
+        # 前向传播跟踪
+        print("输入维度:", test_input.shape)  # (32,26,13,1)
+
+        x = model.freq_conv.layers[0](test_input)  # Conv2D
+        print("Conv2D后:", x.shape)  # (32,26,13,16)
+
+        x = model.freq_conv.layers[1](x)  # MaxPooling
+        print("MaxPool后:", x.shape)  # (32,26,7,16)
+
+        x = model.freq_conv.layers[2](x)  # DepthwiseConv2D
+        print("Depthwise后:", x.shape)  # (32,26,7,64)
+
+        x = model.freq_conv.layers[3](x)  # Reshape
+        print("Reshape后:", x.shape)  # (32,26,448)
+
+
+    test_reshape_dimension()
+
+    model = EnhancedWakeModel((26, 13, 1))
+    model.build(input_shape=(None, 26, 13, 1))
     model.summary()
+
+    # 输出应包含：
+    # reshape (Reshape)          (None, 26, 448)          0
+    # gru (GRU)                   (None, 26, 64)           25088
+    # attention (Attention)       (None, 26, 64)           0

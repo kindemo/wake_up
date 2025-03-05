@@ -1,3 +1,5 @@
+import sys
+
 import tensorflow as tf
 
 # 加权二元交叉熵
@@ -8,6 +10,62 @@ def weighted_binary_crossentropy(weights):
         loss = -weights[0] * y_true * tf.math.log(y_pred + 1e-7) - weights[1] * (1 - y_true) * tf.math.log(1 - y_pred + 1e-7)
         return tf.reduce_mean(loss)
     return loss
+
+
+# class WeightedFocalLoss(tf.keras.losses.Loss):
+#     """支持样本权重与Focal机制的统一损失函数"""
+#
+#     def __init__(self, pos_weight=1.0, gamma=2.0, alpha=0.25):
+#         super().__init__()
+#         self.pos_weight = pos_weight
+#         self.gamma = gamma
+#         self.alpha = alpha
+#
+#     def call(self, y_true, y_pred):
+#         # 带权重的交叉熵基底
+#         bce = tf.nn.weighted_cross_entropy_with_logits(
+#             y_true, y_pred, pos_weight=self.pos_weight
+#         )
+#
+#         # Focal调制因子
+#         p = tf.sigmoid(y_pred)  # 将logits转为概率
+#         pt = tf.where(tf.equal(y_true, 1), p, 1 - p)  # 样本预测置信度
+#         focal_factor = (1 - pt)  ** self.gamma
+#
+#         # 类别平衡因子
+#         alpha_factor = tf.where(
+#             tf.equal(y_true, 1), self.alpha, 1 - self.alpha
+#         )
+#
+#         return tf.reduce_mean(alpha_factor * focal_factor * bce)
+
+class FocalLoss(tf.keras.losses.Loss):
+    """支持 Focal 机制的损失函数（不带样本权重）"""
+
+    def __init__(self, gamma=2.0, alpha=0.25):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, tf.float32)        # 强制转换为 float32 类型
+        # print(f'y_lower1 and upper 0: {tf.less_equal(y_true, 1.0)}')
+        # 使用标准交叉熵基底
+        bce = tf.nn.sigmoid_cross_entropy_with_logits(y_true, y_pred)  # 修改点 1/2
+        # tf.print("y_pred:", y_pred, output_stream=sys.stdout)
+
+        # Focal 调制因子
+        p = tf.sigmoid(y_pred)
+        # tf.print("p:", p, output_stream=sys.stdout)
+        pt = tf.where(tf.equal(y_true, 1.0), p, 1 - p)
+        focal_factor = (1 - pt)  **  self.gamma
+
+        # 类别平衡因子
+        alpha_factor = tf.where(
+            tf.equal(y_true, 1.0), self.alpha, 1 - self.alpha
+        )
+
+        return tf.reduce_mean(alpha_factor * focal_factor * bce)
 
 
 # 设置早停准确率和改善限度
