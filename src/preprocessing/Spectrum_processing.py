@@ -72,13 +72,13 @@ def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_window
 class TestGetMFCC(unittest.TestCase):
     def test_single_channel_input(self):
         """测试单通道输入"""
-        waveform = np.random.randn(11, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
+        waveform = np.random.randn(31, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
         n_mfcc = 13
 
         result = get_mfcc(waveform, n_mfcc=n_mfcc)
 
         # 验证输出形状
-        expected_shape = (1, 26, n_mfcc)  # 输出形状应为 (通道数量, 时间步, n_mfcc)
+        expected_shape = (1, 76, n_mfcc)  # 输出形状应为 (通道数量, 时间步, n_mfcc)
         self.assertEqual(result.shape, tf.TensorShape(expected_shape))
 
         # 验证输出值是否为实数
@@ -90,30 +90,28 @@ class TestGetMFCC(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(result.numpy())))
 
 
+    def test_multi_channel_input(self):
+        """测试多通道输入"""
+        waveform = np.random.randn(31, 400, 3)  # 多通道输入，形状为 (时间步, 帧内采样点, 通道数量)
+        n_mfcc = 13
 
+        result = get_mfcc(waveform, n_mfcc=n_mfcc)
 
-    # def test_multi_channel_input(self):
-    #     """测试多通道输入"""
-    #     waveform = np.random.randn(100, 400, 2)  # 多通道输入，形状为 (时间步, 帧内采样点, 通道数量)
-    #     n_mfcc = 13
-    #
-    #     result = get_mfcc(waveform, n_mfcc=n_mfcc)
-    #
-    #     times = int(np.floor((waveform.shape[0] * waveform.shape[1] - 400) / 160)) + 1
-    #
-    #     # 验证输出形状
-    #     expected_shape = tf.TensorShape([2, times, n_mfcc])    # 输出形状应为 (通道数量, 时间步, n_mfcc)
-    #     self.assertEqual(result.shape, tf.TensorShape(expected_shape))
-    #
-    #     # 验证输出值是否为实数
-    #     self.assertTrue(tf.reduce_all(tf.math.is_finite(result)))
-    #
-    # def test_invalid_input_shape(self):
-    #     """测试输入形状不正确的情况"""
-    #     waveform = np.random.randn(100, 400, 2, 2)  # 四维输入，形状不正确
-    #
-    #     with self.assertRaises(ValueError):
-    #         get_mfcc(waveform)
+        times = int(np.floor((waveform.shape[0] * waveform.shape[1] - 400) / 160)) + 1
+
+        # 验证输出形状
+        expected_shape = tf.TensorShape([3, times, n_mfcc])    # 输出形状应为 (通道数量, 时间步, n_mfcc)
+        self.assertEqual(result.shape, tf.TensorShape(expected_shape))
+
+        # 验证输出值是否为实数
+        self.assertTrue(tf.reduce_all(tf.math.is_finite(result)))
+
+    def test_invalid_input_shape(self):
+        """测试输入形状不正确的情况"""
+        waveform = np.random.randn(100, 400, 2, 2)  # 四维输入，形状不正确
+
+        with self.assertRaises(ValueError):
+            get_mfcc(waveform)
 
     # def test_insufficient_input_length(self):
     #     """测试输入长度不足的情况"""

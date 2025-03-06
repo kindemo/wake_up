@@ -44,7 +44,7 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 10
+epochs = 5
 f_block = 16     # 每次从一类文件中取出几个
 a_balance = 0.52        # 控制样本平衡
 # 设定一个固定的 buffer_size
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     #     print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
 
 
-    dataset, label = preprocess_dataset(dataset)   # 加載自定義預處理
+    dataset, label = preprocess_dataset(dataset, num_win=31)   # 加載自定義預處理
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # 模型构建
     l2_reg = tf.keras.regularizers.L2(l2=0.01)
     # 此处根据实际情况调整 ！！！
-    model = EnhancedWakeModel((26, 13, 1), 2)  # 输入形状应该是 (26, 13, 1)
+    model = EnhancedWakeModel((76, 13, 1), 2)  # 输入形状应该是 (76, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
     compile_model(model, a_balance)
@@ -153,13 +153,13 @@ if __name__ == "__main__":
     history = train_model(model, train_ds_four, val_ds_four, epochs, callbacks)
 
 
-    export = ExportModel(model)
+    export = ExportModel(model, num_win=31)
     tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
     print("end")
 
 
     # 取出频谱数据(一个批次必须大于9)
-    # (batch, 26, 13) 三维
+    # (batch, 76, 13) 三维
     for e_g_spectrograms, example_spect_labels in train_ds.take(1):
         # example_audio.shape: (10, 16000)
         # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")

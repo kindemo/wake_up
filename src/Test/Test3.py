@@ -10,7 +10,7 @@ class TestSTFTTimeSteps(unittest.TestCase):
 
     def test_one_second_audio(self):
         signal_length = 16000
-        expected_time_steps = 26
+        expected_time_steps = 76
         waveform = np.random.randn(11, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
         # 创建一个随机信号
         single_channel = tf.reshape(waveform, [-1])  # 形状为 (帧时间步 * 帧内采样点,)

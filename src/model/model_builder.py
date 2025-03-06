@@ -19,7 +19,7 @@ class EnhancedWakeModel(Model):
             Conv2D(16, (3, 3), padding='same'),
             MaxPooling2D((1, 2), padding='same'),
             DepthwiseConv2D(3, depth_multiplier=4, padding='same'),
-            Reshape((-1, pooled_freq * 16 * 4)),  # 输出形状：(B,26,448)
+            Reshape((-1, pooled_freq * 16 * 4)),  # 输出形状：(B,76,448)
             Dense(64)  # 新增：将448维降为64维
         ])
 
@@ -38,9 +38,9 @@ class EnhancedWakeModel(Model):
         ])
 
     def call(self, x):
-        f = self.freq_conv(x)  # 现在形状：(B,26,64)
+        f = self.freq_conv(x)           # 现在形状：(B,76,64)
         t_input = tf.squeeze(x, axis=-1)
-        t = self.time_conv(t_input)  # 形状：(B,26,64)
+        t = self.time_conv(t_input)     # 形状：(B,76,64)
 
         attended = self.cross_attn([f, t])  # 维度已匹配
         pooled = tf.reduce_mean(attended, axis=1)
@@ -52,35 +52,30 @@ class EnhancedWakeModel(Model):
 if __name__ == "__main__":
     # 单元测试代码
     def test_reshape_dimension():
-        input_shape = (26, 13, 1)
+        input_shape = (76, 13, 1)
         model = EnhancedWakeModel(input_shape)
 
         # 模拟输入
-        test_input = tf.random.normal(shape=(32, 26, 13, 1))
+        test_input = tf.random.normal(shape=(32, 76, 13, 1))
 
         # 前向传播跟踪
-        print("输入维度:", test_input.shape)  # (32,26,13,1)
+        print("输入维度:", test_input.shape)  # (32,76,13,1)
 
         x = model.freq_conv.layers[0](test_input)  # Conv2D
-        print("Conv2D后:", x.shape)  # (32,26,13,16)
+        print("Conv2D后:", x.shape)  # (32,76,13,16)
 
         x = model.freq_conv.layers[1](x)  # MaxPooling
-        print("MaxPool后:", x.shape)  # (32,26,7,16)
+        print("MaxPool后:", x.shape)  # (32,76,7,16)
 
         x = model.freq_conv.layers[2](x)  # DepthwiseConv2D
-        print("Depthwise后:", x.shape)  # (32,26,7,64)
+        print("Depthwise后:", x.shape)  # (32,76,7,64)
 
         x = model.freq_conv.layers[3](x)  # Reshape
-        print("Reshape后:", x.shape)  # (32,26,448)
+        print("Reshape后:", x.shape)  # (32,76,448)
 
 
     test_reshape_dimension()
 
-    model = EnhancedWakeModel((26, 13, 1))
-    model.build(input_shape=(None, 26, 13, 1))
+    model = EnhancedWakeModel((76, 13, 1))
+    model.build(input_shape=(None, 76, 13, 1))
     model.summary()
-
-    # 输出应包含：
-    # reshape (Reshape)          (None, 26, 448)          0
-    # gru (GRU)                   (None, 26, 64)           25088
-    # attention (Attention)       (None, 26, 64)           0

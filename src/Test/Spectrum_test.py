@@ -60,7 +60,7 @@ class TestGetMFCC(unittest.TestCase):
         result = get_mfcc(waveform, n_mfcc=n_mfcc)
 
         # 验证输出形状
-        expected_shape = (1, 26, n_mfcc)  # 输出形状应为 (通道数量, 时间步, n_mfcc)
+        expected_shape = (1, 76, n_mfcc)  # 输出形状应为 (通道数量, 时间步, n_mfcc)
         self.assertEqual(result.shape, tf.TensorShape(expected_shape))
 
         # 验证输出值是否为实数

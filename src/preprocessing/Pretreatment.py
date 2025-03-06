@@ -10,7 +10,7 @@ from src.preprocessing.windowing import get_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
 
 
-def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
+def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=31):
     """
     分割成通道的核心调用代码
     :param wave: 波形数据需要是TensorFlow 张量
@@ -18,7 +18,7 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     :param frame_length:
     :param n_mfcc:
     :param num_win:
-    :return: 返回形状为 (num_channels, 26, 13) 的张量。
+    :return: 返回形状为 (num_channels, 76, 13) 的张量。
     """
     # 先测试无端点检测
     # 确保输入类型
@@ -37,7 +37,7 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
         windows = get_windows(waveform, frame_length, num_windows=num_win)
     except Exception as e:
         print(f"Error getting windows: {e}")
-        windows = tf.zeros([11, 400, 1], dtype=tf.float32)
+        windows = tf.zeros([31, 400, 1], dtype=tf.float32)
     # print(f"windows shape: {windows.shape}")
 
     # 测试标记
@@ -62,22 +62,23 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=11):
     #     return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
 
 
-def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):
+def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=31):
     """
     输入： 文件路径
-    按照默认参数会被划分为(400*11-400)+1=26个帧
-    将音频张量划分为多个通道，每个通道的形状为 (26, 13)。
-    返回形状为 (num_channels, 26, 13) 的张量。
+    按照默认参数会被划分为(400*31-400)+1=76个帧
+    将音频张量划分为多个通道，每个通道的形状为 (76, 13)。
+    返回形状为 (num_channels, 76, 13) 的张量。
     """
     # 对tensorflow解码
     if isinstance(file_path, bytes):
         file_path = file_path.decode("utf-8")
-    elif isinstance(file_path, tf.string):
-        file_path = file_path.numpy().decode("utf-8")
     elif isinstance(file_path, str):
         pass
+    elif isinstance(file_path, tf.Tensor) and file_path.dtype == tf.string:
+        file_path = file_path.numpy().decode("utf-8")
     else:
-        raise TypeError("file_path must be str,bytes or tf.string")
+        print(tf.shape(file_path))
+        raise TypeError("file_path must be str, bytes, or tf.string Tensor")
     # 加载音频文件
     warnings.filterwarnings("ignore", category=wavfile.WavFileWarning)  # 忽略元数据无法读取的警告
     assert isinstance(file_path, str), "file_path must be str"
@@ -90,7 +91,7 @@ def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=11):
 
 
 
-def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=11):
+def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=31):
     """
     加载音频文件并划分通道，返回通道和标签。
     """
@@ -114,7 +115,7 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     return channels, labels
 
 
-def preprocess_dataset(dataset, frame_length=400, n_mfcc=13, num_win=11):
+def preprocess_dataset(dataset, frame_length=400, n_mfcc=13, num_win=31):
     """
     预处理数据集，加载并划分音频文件。
     返回: 数据集
@@ -139,16 +140,16 @@ class TestLoadAndSplitAudio(unittest.TestCase):
     @patch(__name__ + '.split_audio_channels')
     def test_load_and_split_audio(self, mock_split_audio_channels):
         # 模拟 split_audio_channels 函数的返回值
-        mock_channels = tf.random.normal([31, 26, 13])
+        mock_channels = tf.random.normal([31, 76, 13])
         mock_split_audio_channels.return_value = mock_channels
 
         # 定义测试输入
 
-        file_path = "D:/PycharmProjects/wark_by_voice/verify/0_non_wake/1森林－昆虫－mcx20070416.wav"
+        file_path = str("D:/PycharmProjects/wark_by_voice/verify/0_non_wake/1森林－昆虫－mcx20070416.wav")
         label = tf.constant(0, dtype=tf.int32)
 
         # 调用被测试函数
-        channels, labels = load_and_split_audio(file_path, label)
+        channels, labels = load_and_split_audio(file_path, label, num_win=31)
 
         # 检查输出类型
         self.assertEqual(channels.dtype, tf.float32)

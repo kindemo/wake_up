@@ -1,68 +1,131 @@
 import tensorflow as tf
 
+# def get_windows(waveform: tf.Tensor,
+#                 frame_length=400,
+#                 frame_step=400,
+#                 num_windows=31) -> tf.Tensor:
+#     """
+#     原始版本，舍弃大量帧
+#     :param waveform:
+#     :param frame_length:
+#     :param frame_step:
+#     :param num_windows:
+#     :return:
+#     """
+#     # 强制参数转换为整数
+#     frame_length = tf.cast(frame_length, tf.int32)
+#     frame_step = tf.cast(frame_step, tf.int32)
+#     num_windows = tf.cast(num_windows, tf.int32)
+#
+#     # 确保输入是一维Tensor
+#     waveform = tf.convert_to_tensor(waveform, dtype=tf.float32)
+#     waveform = tf.reshape(waveform, [-1])
+#     original_length = tf.shape(waveform)[0]
+#
+#     # 计算最小所需长度并补零
+#     min_required_length = (num_windows - 1) * frame_step + frame_length
+#     pad_needed = tf.maximum(min_required_length - original_length, 0)
+#     waveform_padded = tf.pad(waveform, [[0, pad_needed]])
+#
+#     # 分帧（允许末尾补零）
+#     frames = tf.signal.frame(waveform_padded, frame_length, frame_step, pad_end=True, axis=0)
+#     num_frames_actual = tf.shape(frames)[0]
+#
+#     # 计算滑动窗口参数
+#     window_stride = num_windows // 2
+#     num_windows_available = (num_frames_actual - num_windows) // window_stride + 1
+#
+#     # 确保至少能生成一个窗口
+#     tf.debugging.assert_greater_equal(
+#         num_windows_available,
+#         1,
+#         message="Not enough frames to create windows"
+#     )
+#
+#     # 收集窗口数据
+#     start_indices = window_stride * tf.range(num_windows_available, dtype=tf.int32)
+#     window_indices = start_indices[:, tf.newaxis] + tf.range(num_windows, dtype=tf.int32)[tf.newaxis, :]
+#     windows = tf.gather(frames, window_indices)
+#
+#     return tf.transpose(windows, [1, 2, 0])
+
+
+
 
 def get_windows(waveform: tf.Tensor,
-                frame_length = 400,
-                frame_step = 400,
-                num_windows = 11) -> tf.Tensor:
+                frame_length=400,
+                frame_step=400,
+                num_windows=31) -> tf.Tensor:
     """
-    TensorFlow版音频无重叠分帧+滑动拼接窗（修正类型错误版）
+    改进版音频分帧处理，实现两阶段标准化分帧
 
     参数:
-        waveform: 输入的音频信号（1D Tensor）
-        frame_length: 每个帧的样本数（强制转换为整数）
-        frame_step: 分帧步长（强制转换为整数）
-        num_windows: 每个拼接窗包含的小帧数（强制转换为整数）
+        waveform: 输入的1D音频信号Tensor
+        frame_length: 每个小帧的样本数
+        frame_step: 小帧之间的步长
+        num_windows: 每个大窗口包含的小帧数
 
     返回:
-        Tensor形状为（num_windows, frame_length, num_windows_available）
+        Tensor形状为（num_windows, frame_length, num_big_frames）
     """
-    # 强制参数转换为整数
+    # 参数类型转换
     frame_length = tf.cast(frame_length, tf.int32)
     frame_step = tf.cast(frame_step, tf.int32)
     num_windows = tf.cast(num_windows, tf.int32)
 
-    # 确保输入是一维Tensor
-    waveform = tf.convert_to_tensor(waveform, dtype=tf.float32)
+    # 输入预处理
     waveform = tf.reshape(waveform, [-1])
-
-    # 计算最小所需长度（使用整数运算）
-    min_required_length = (num_windows - 1) * frame_step + frame_length
     original_length = tf.shape(waveform)[0]
 
-    # 动态检查输入长度
-    tf.debugging.assert_greater_equal(
-        original_length,
-        min_required_length,
-        message=f"Input too short: needs {min_required_length} samples")
+    # 第一阶段参数计算
+    big_frame_length = num_windows * frame_length
+    big_step = (num_windows // 2) * frame_step
+    threshold = (big_frame_length * 6) // 10  # 60%阈值
 
-    num_frames = (original_length - frame_length) // frame_step + 1
-    total_length = (num_frames - 1) * frame_step + frame_length
+    # 短波形处理（直接补零）
+    def handle_short():
+        pad = big_frame_length - original_length
+        padded = tf.pad(waveform, [[0, pad]])
+        return tf.expand_dims(padded, 0)
 
-    # 修正2：确保填充量为整数类型
-    pad_amount = tf.maximum(total_length - original_length, 0)
-    waveform_padded = tf.pad(waveform, [[0, pad_amount]], constant_values=0.0)
+    # 长波形处理（动态分帧）
+    def handle_long():
+        # 生成候选起始点
+        starts = tf.range(0, original_length, big_step)
 
-    # 执行分帧(无重叠分小帧)
-    frames = tf.signal.frame(waveform_padded, frame_length, frame_step, pad_end=False, axis=0)
-    num_frames_actual = tf.shape(frames)[0]
+        # 计算有效长度并过滤
+        ends = starts + big_frame_length
+        valid_lengths = tf.where(
+            ends <= original_length,
+            big_frame_length,
+            original_length - starts
+        )
+        keep_mask = valid_lengths >= threshold
+        kept_starts = tf.boolean_mask(starts, keep_mask)
 
-    # 计算滑动窗口参数
-    window_stride = num_windows // 2
-    num_windows_available = (num_frames_actual - num_windows) // window_stride + 1
+        # 提取并补零窗口
+        def get_window(start):
+            window = waveform[start:start + big_frame_length]
+            return tf.pad(window, [[0, big_frame_length - tf.shape(window)[0]]])
 
-    # 检查窗口数量有效性
-    tf.debugging.assert_greater_equal(
-        num_windows_available,
-        1,
-        message="Not enough frames to create windows")
+        return tf.map_fn(get_window, kept_starts, fn_output_signature=tf.float32)
 
-    start_indices = window_stride * tf.range(num_windows_available, dtype=tf.int32)
-    window_indices = start_indices[:, tf.newaxis] + tf.range(num_windows, dtype=tf.int32)[tf.newaxis, :]
+    # 执行分阶段处理
+    big_frames = tf.cond(
+        original_length < big_frame_length,
+        handle_short,
+        handle_long
+    )
 
-    # 收集窗口数据并调整维度
-    windows = tf.gather(frames, window_indices)
-    return tf.transpose(windows, [1, 2, 0])
+    # 第二阶段：分小帧并调整维度
+    small_frames = tf.signal.frame(
+        big_frames,
+        frame_length=frame_length,
+        frame_step=frame_step,
+        pad_end=False,
+        axis=1
+    )
+    return tf.transpose(small_frames, [1, 2, 0])
 
 
 
@@ -73,12 +136,12 @@ class TestGetWindows(tf.test.TestCase):
         waveform = tf.random.normal([15000])  # 音频信号长度为 15000
         frame_length = 400
         frame_step = 400
-        num_windows = 11
+        num_windows = 31
 
         result = get_windows(waveform, frame_length, frame_step, num_windows)
 
         # 验证输出形状
-        expected_shape = (num_windows, frame_length, 6)  # 音频长度为15000，可以生成6个拼接窗
+        expected_shape = (num_windows, frame_length, 2)  # 音频长度为15000，可以生成2个拼接窗
         self.assertEqual(result.shape, expected_shape)
 
     def test_boundary_case(self):
@@ -86,12 +149,12 @@ class TestGetWindows(tf.test.TestCase):
         waveform = tf.random.normal([4000])  # 音频长度刚好满足要求
         frame_length = 400
         frame_step = 400
-        num_windows = 10
+        num_windows = 31
 
         # 验证参数
         min_required_length = (num_windows - 1) * frame_step + frame_length
         min_required_length = tf.cast(min_required_length, tf.int32)
-        self.assertEqual(min_required_length, 4000)  # 确保最小所需长度为 4000
+        self.assertEqual(min_required_length, 12400)  # 确保最小所需长度为 4000
 
         result = get_windows(waveform, frame_length, frame_step, num_windows)
 
@@ -99,16 +162,16 @@ class TestGetWindows(tf.test.TestCase):
         expected_shape = (num_windows, frame_length, 1)  # 只能生成1个拼接窗
         self.assertEqual(result.shape, expected_shape)
 
-    def test_insufficient_length(self):
-        """测试音频长度不足的情况"""
-        waveform = tf.random.normal([3000])  # 音频长度不足
-        frame_length = 400
-        frame_step = 400
-        num_windows = 10
-
-        # 使用 unittest 提供的 assertRaises 方法来捕获错误
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            get_windows(waveform, frame_length, frame_step, num_windows)
+    # def test_insufficient_length(self):
+    #     """测试音频长度不足的情况"""
+    #     waveform = tf.random.normal([3000])  # 音频长度不足
+    #     frame_length = 400
+    #     frame_step = 400
+    #     num_windows = 10
+    #
+    #     # 使用 unittest 提供的 assertRaises 方法来捕获错误
+    #     with self.assertRaises(tf.errors.InvalidArgumentError):
+    #         get_windows(waveform, frame_length, frame_step, num_windows)
 
     def test_tensor_input(self):
         """测试输入为 TensorFlow Tensor 的情况"""
@@ -123,15 +186,15 @@ class TestGetWindows(tf.test.TestCase):
         expected_shape = (num_windows, frame_length, 4)  # 音频长度为10000，可以生成4个拼接窗
         self.assertEqual(result.shape, expected_shape)
 
-    def test_extreme_case(self):
-        """测试极端情况：frame_length 或 frame_step 非常大"""
-        waveform = tf.random.normal([1000])  # 音频信号长度为 1000
-        frame_length = 1000
-        frame_step = 1000
-        num_windows = 10
-
-        with self.assertRaises(tf.errors.InvalidArgumentError):
-            get_windows(waveform, frame_length, frame_step, num_windows)
+    # def test_extreme_case(self):
+    #     """测试极端情况：frame_length 或 frame_step 非常大"""
+    #     waveform = tf.random.normal([1000])  # 音频信号长度为 1000
+    #     frame_length = 1000
+    #     frame_step = 1000
+    #     num_windows = 10
+    #
+    #     with self.assertRaises(tf.errors.InvalidArgumentError):
+    #         get_windows(waveform, frame_length, frame_step, num_windows)
 
 
 if __name__ == '__main__':

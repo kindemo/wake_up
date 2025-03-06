@@ -1,5 +1,6 @@
 # import tensorflow as tf
 # from pathlib import Path
+# from src.preprocessing.wave_processing import squeeze as squeezing
 #
 # model_path = "D:/PycharmProjects/wark_by_voice/saved"
 # loaded_model = tf.saved_model.load(model_path)
@@ -54,7 +55,7 @@
 # print("Predictions:", predictions)
 # print("Class IDs:", class_ids)
 # print("Stacked Tensor:\n", stacked_tensor)
-
+#
 
 import tensorflow as tf
 from pathlib import Path
@@ -65,11 +66,17 @@ from matplotlib import pyplot as plt
 model_path = "D:/PycharmProjects/wark_by_voice/saved"
 loaded_model = tf.saved_model.load(model_path)
 
+# # 打印模型的签名
+# print(list(loaded_model.signatures.keys()))  # 查看签名名称
+# infer = loaded_model.signatures["serving_default"]
+# print(infer.structured_input_signature)  # 查看输入签名
+# print(infer.structured_outputs)  # 查看输出签名
+
 # 准备测试音频路径
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/verify/1_wake")
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
 data_dir = Path("D:/PycharmProjects/wark_by_voice")
-audio_file_path = str(data_dir / '3月3日-上午9点29分.yp 1 11 16 35.wav')
+audio_file_path = str(data_dir / 'miya_long3.wav')
 
 
 # 直接调用模型处理输入（传入文件路径）
@@ -81,7 +88,7 @@ predictions = output['predictions'].numpy()
 class_ids = output['class_ids'].numpy()
 
 # 生成时间轴
-time_step = 0.125  # 根据每个窗口的持续时间调整
+time_step = 0.375  # 根据每个窗口的持续时间调整
 time_axis = [i * time_step for i in range(class_ids.shape[0])]
 
 # 组合结果
