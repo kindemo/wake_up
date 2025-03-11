@@ -66,6 +66,11 @@ from matplotlib import pyplot as plt
 model_path = "D:/PycharmProjects/wark_by_voice/saved"
 loaded_model = tf.saved_model.load(model_path)
 
+
+# # **
+# # 调用文件路径签名
+# loaded_model.signatures["file_input"](x=tf.constant("audio.wav"))
+
 # # 打印模型的签名
 # print(list(loaded_model.signatures.keys()))  # 查看签名名称
 # infer = loaded_model.signatures["serving_default"]
@@ -77,6 +82,10 @@ loaded_model = tf.saved_model.load(model_path)
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
 data_dir = Path("D:/PycharmProjects/wark_by_voice")
 audio_file_path = str(data_dir / 'miya_long3.wav')
+
+# print(list(loaded_model.signatures.keys()))  # 通常为 "serving_default"
+# infer = loaded_model.signatures["serving_default"]
+# print(infer.inputs)  # 查看输入张量要求
 
 
 # 直接调用模型处理输入（传入文件路径）

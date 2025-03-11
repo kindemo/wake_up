@@ -13,10 +13,19 @@ class ExportModel(tf.Module):
         self.num_win = num_win
 
         # 注册方法的签名
-        self.__call__.get_concrete_function(
-            x=tf.TensorSpec(shape=(), dtype=tf.string))
-        self.__call__.get_concrete_function(
-            x=tf.TensorSpec(shape=[None, 16000], dtype=tf.float32))
+        # self.__call__.get_concrete_function(
+        #     x=tf.TensorSpec(shape=(), dtype=tf.string))
+        # # 直接输入特征图
+        # self.__call__.get_concrete_function(
+        #     x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32))
+
+        # 生成具体签名并保存为属性
+        self.file_signature = self.__call__.get_concrete_function(
+            x=tf.TensorSpec(shape=(), dtype=tf.string)
+        )
+        self.mfcc_signature = self.__call__.get_concrete_function(
+            x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32)
+        )
 
     @tf.function
     def __call__(self, x):
@@ -25,9 +34,7 @@ class ExportModel(tf.Module):
             x = tf.constant(x, dtype=tf.string)
 
         # 如果输入是字符串（文件路径），则加载并解码音频
-        s_rate = 16000
         if x.dtype == tf.string:
-            try:
                 # 用tensorflow自带的库
                 audio_binary = tf.io.read_file(x)
                 wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
@@ -35,20 +42,38 @@ class ExportModel(tf.Module):
                 wave = tf.cast(wave, dtype=tf.float32)
                 # print("ExportModel’s wave shape before squeeze:", wave.shape)
                 wave = squeezing(wave)
-            except Exception as e:
-                print(f"Error loading audio file: {e}")
-                wave = tf.zeros(16000, dtype=tf.float32)
+
+                s_rate = tf.cast(s_rate, dtype=tf.float32)
+                # 将音频划分为多个通道
+                channels = split_audio_channels(wave, s_rate, self.frame_length, self.n_mfcc, self.num_win)
+                channels = tf.expand_dims(channels, axis=-1)  # 添加通道维度
+                results = self.model(channels, training=False)  # 模型预测
+
         elif x.dtype == tf.float32:
             # 需要改进
-            wave = x
-            wave = tf.cast(wave, dtype=tf.float32)
+            mfcc = x
+            mfcc = tf.cast(mfcc, dtype=tf.float32)
+            results = self.model(mfcc, training=False)  # 模型预测
         else:
             raise ValueError("Unsupported input type. Expected file path or audio data.")
 
-        s_rate = tf.cast(s_rate, dtype=tf.float32)
 
-        # 将音频划分为多个通道
-        channels = split_audio_channels(wave, s_rate, self.frame_length, self.n_mfcc, self.num_win)
+        # print(results.shape)
+
+        # 设置阈值并判断类别
+        threshold = 0.5
+        class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
+
+        return {'predictions': results}
+
+        # , 'class_ids': class_ids
+
+
+
+
+
+
+
 
 
         # # 使用 tf.TensorArray 替代 Python 列表
@@ -65,26 +90,10 @@ class ExportModel(tf.Module):
         #     result = tf.squeeze(result, axis=0)  # 去掉批次维度
         #     results = results.write(i, result)  # 将结果写入 TensorArray
 
-
-        channels = tf.expand_dims(channels, axis=-1)  # 添加通道维度
-        results = self.model(channels, training=False)  # 模型预测
-        # print(results.shape)
-
         # 需要交换维度和通道位置（关键步骤！）
         # channels = tf.transpose(channels, [0, 2, 1, 3])  # 输出形状 (num_channels, 13, 76, 1)
         # 将 TensorArray 转换为张量
         # results = results.stack()  # 形状为 (num_channels, num_classes)
-
-        # 设置阈值并判断类别
-        threshold = 0.5
-        class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
-
-        return {'predictions': results, 'class_ids': class_ids}
-
-
-
-
-
 
 
 

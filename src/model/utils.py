@@ -68,16 +68,29 @@ class FocalLoss(tf.keras.losses.Loss):
         return tf.reduce_mean(alpha_factor * focal_factor * bce)
 
 
+
+
 # 设置早停准确率和改善限度
 class CustomEarlyStopping(tf.keras.callbacks.Callback):
-    def __init__(self, patience=2, train_accuracy_threshold=0.8):
+    def __init__(self,
+                 patience=2,
+                 train_accuracy_threshold=0.85,
+                 best_weights_path='D:/PycharmProjects/wark_by_voice/temp_weights/best_weights.h5',
+                 best_model_path='D:/PycharmProjects/wark_by_voice/saved'):
         super(CustomEarlyStopping, self).__init__()
         self.patience = patience
         self.train_accuracy_threshold = train_accuracy_threshold
-        self.best_weights = None
-        self.best_weights_path = 'D:/PycharmProjects/wark_by_voice/temp_weights/best_weights.h5'
+        self.best_weights_path = best_weights_path      # 权重保存路径
+        # self.best_model_path = best_model_path          # 完整模型保存路径
         self.best = None
         self.wait = 0
+
+        # input_shape = [None, 76, 13, 1]
+
+        # 将 Keras 模型的推理逻辑包装为 TensorFlow 函数
+        # @tf.function(input_signature=[tf.TensorSpec(shape=input_shape, dtype=tf.float32)])
+        # def serving_default(input_tensor):
+        #     return self.model(input_tensor)
 
     def on_train_begin(self, logs=None):
         self.wait = 0
@@ -86,7 +99,7 @@ class CustomEarlyStopping(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         # 获取验证集损失和训练集准确率
         val_loss = logs.get('val_loss', float('inf'))   # 如果没有 val_loss，则使用一个很大的值
-        train_accuracy = logs.get('accuracy', 0.0)  # 或者是 'acc'，取决于你的模型定义
+        train_accuracy = logs.get('accuracy', 0.0)      # 或者是 'acc'，取决于模型定义
 
         # 检查训练集准确率是否达到阈值
         if train_accuracy < self.train_accuracy_threshold:
@@ -95,14 +108,72 @@ class CustomEarlyStopping(tf.keras.callbacks.Callback):
 
         # 检查验证集损失是否改善
         if val_loss < self.best:
+            # print(f"\t验证损失改善 ({self.best:.4f} → {val_loss:.4f})，保存最佳模型和权重")
             self.best = val_loss
             self.wait = 0
-            self.model.save_weights(self.best_weights_path)  # 保存权重到磁盘
-            # self.best_weights = self.model.get_weights()
+            # 保存权重
+            self.model.save_weights(self.best_weights_path)
+            # 保存完整模型（包含结构和优化器状态）
+            # self.model.save(self.best_model_path)
+
+
+            # # 保存模型为 SavedModel 格式并指定签名
+            # tf.saved_model.save(
+            #     self.model,
+            #     self.best_model_path,
+            #     signatures={"serving_default": serving_default}
+            # )
+
+
         else:
             self.wait += 1
             if self.wait >= self.patience:
                 self.model.stop_training = True
                 print(f"\t验证集损失在连续 {self.patience} 个轮次内没有改善，训练提前停止。")
-                # self.model.set_weights(self.best_weights)  # 恢复最佳权重
-                self.model.load_weights(self.best_weights_path)  # 从磁盘加载权重
+                # print(f"\t正在加载最佳模型：{self.best_model_path}")
+                # 训练终止时自动加载最佳模型
+                # self.model = tf.keras.models.load_model(self.best_model_path)
+                self.model.load_weights(self.best_weights_path)
+
+
+
+
+#
+# # 设置早停准确率和改善限度
+# class CustomEarlyStopping(tf.keras.callbacks.Callback):
+#     def __init__(self, patience=2, train_accuracy_threshold=0.8):
+#         super(CustomEarlyStopping, self).__init__()
+#         self.patience = patience
+#         self.train_accuracy_threshold = train_accuracy_threshold
+#         self.best_weights = None
+#         self.best_weights_path = 'D:/PycharmProjects/wark_by_voice/temp_weights/best_weights.h5'
+#         self.best = None
+#         self.wait = 0
+#
+#     def on_train_begin(self, logs=None):
+#         self.wait = 0
+#         self.best = float('inf')  # 假设监控的是损失，如果是准确率则初始化为 -inf
+#
+#     def on_epoch_end(self, epoch, logs=None):
+#         # 获取验证集损失和训练集准确率
+#         val_loss = logs.get('val_loss', float('inf'))   # 如果没有 val_loss，则使用一个很大的值
+#         train_accuracy = logs.get('accuracy', 0.0)  # 或者是 'acc'，取决于你的模型定义
+#
+#         # 检查训练集准确率是否达到阈值
+#         if train_accuracy < self.train_accuracy_threshold:
+#             print(f"\t训练集准确率未达到 {self.train_accuracy_threshold * 100}%，继续训练...")
+#             return
+#
+#         # 检查验证集损失是否改善
+#         if val_loss < self.best:
+#             self.best = val_loss
+#             self.wait = 0
+#             self.model.save_weights(self.best_weights_path)  # 保存权重到磁盘
+#             # self.best_weights = self.model.get_weights()
+#         else:
+#             self.wait += 1
+#             if self.wait >= self.patience:
+#                 self.model.stop_training = True
+#                 print(f"\t验证集损失在连续 {self.patience} 个轮次内没有改善，训练提前停止。")
+#                 # self.model.set_weights(self.best_weights)  # 恢复最佳权重
+#                 self.model.load_weights(self.best_weights_path)  # 从磁盘加载权重

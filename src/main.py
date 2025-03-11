@@ -1,4 +1,6 @@
 from pathlib import Path
+
+from src.model.export_model import ExportModel
 from src.preprocessing.data_preprocessing import normalize_data, preprocess_data
 from src.model.model_builder import EnhancedWakeModel
 from src.model.model_trainer import compile_model, train_model
@@ -44,11 +46,14 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 5
+epochs = 1
 f_block = 16     # 每次从一类文件中取出几个
-a_balance = 0.52        # 控制样本平衡
-# 设定一个固定的 buffer_size
-buffer_size = 5120   # 缓冲区大小设定为 5120
+a_balance = 0.7        # 控制样本平衡(更偏爱优化正类)
+gamma_punish = 0.5
+l2_reg = 1e-4
+
+# # 设定一个固定的 buffer_size
+# buffer_size = 5120   # 缓冲区大小设定为 5120
 
 
 
@@ -138,23 +143,33 @@ if __name__ == "__main__":
     # print("所有数据加载完成，数据总数：", len(all_data))
 
     # 模型构建
-    l2_reg = tf.keras.regularizers.L2(l2=0.01)
     # 此处根据实际情况调整 ！！！
-    model = EnhancedWakeModel((76, 13, 1), 2)  # 输入形状应该是 (76, 13, 1)
+    model = EnhancedWakeModel((76, 13, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
-    compile_model(model, a_balance)
+    compile_model(model, gamma_punish, a_balance)
 
     # 训练模型
     callbacks = [
-        CustomEarlyStopping(patience=2, train_accuracy_threshold=0.85),
+        CustomEarlyStopping(patience=3, train_accuracy_threshold=0.9),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
     ]
     history = train_model(model, train_ds_four, val_ds_four, epochs, callbacks)
 
 
     export = ExportModel(model, num_win=31)
-    tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+    # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
+
+    # 保存模型, 显式声明签名
+    tf.saved_model.save(
+        export,
+        "D:/PycharmProjects/wark_by_voice/saved",
+        signatures={
+            "file_input": export.file_signature,
+            "mfcc_input": export.mfcc_signature
+        }
+    )
+
     print("end")
 
 
@@ -199,17 +214,18 @@ if __name__ == "__main__":
     # history 属性是一个字典，记录了训练过程中的各种指标，如损失和准确率
     plot_training_history(history, figsize=(16, 6))
 
-
+    print("开始输出混淆矩阵：")
     all_labels_class = ['0_non_wake', '1_wake']
     # 绘制混淆矩阵(可以修改为应用test)
     model.evaluate(val_ds_four, return_dict=True)
     y_pred = model.predict(val_ds_four)
     y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+
     # 真实标签
     y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
-    # print("True labels:", y_true)
-    # print("Predicted value:", y_pred)
-    # print("Predicted labels:", y_pred_class)
+    print("True labels:", y_true)
+    print("Predicted value:", y_pred)
+    print("Predicted labels:", y_pred_class)
 
     confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
     plt.figure(figsize=(10, 8))
@@ -223,6 +239,9 @@ if __name__ == "__main__":
 
     # 结束性能分析
     # tf.profiler.experimental.stop()
+
+
+
 
 
 

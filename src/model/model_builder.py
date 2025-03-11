@@ -1,81 +1,65 @@
 from keras import Input
+from keras.layers import BatchNormalization
+from keras.regularizers import l2
 from tensorflow.keras import Model, Sequential, layers
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, DepthwiseConv2D, Reshape
 from tensorflow.keras.layers import Conv1D, LayerNormalization, GRU, Dense, Dropout
 from tensorflow.keras.layers import Attention
 import tensorflow as tf
 
+from src.preprocessing.Spectrum_processing import create_mfcc_model
+
 
 class EnhancedWakeModel(Model):
-    def __init__(self, input_shape, l2_reg=1e-4):
+    def __init__(self, input_shape, l2_reg=1e-4):  # 默认值设为1e-4
         super(EnhancedWakeModel, self).__init__()
 
-        original_freq = input_shape[1]
-        pooled_freq = (original_freq + 1) // 2
-
-        # 时频分支（添加降维层）
+        # 时频分支（移除池化层，修正正则化器）
         self.freq_conv = Sequential([
             Input(shape=input_shape),
-            Conv2D(16, (3, 3), padding='same'),
-            MaxPooling2D((1, 2), padding='same'),
-            DepthwiseConv2D(3, depth_multiplier=4, padding='same'),
-            Reshape((-1, pooled_freq * 16 * 4)),  # 输出形状：(B,76,448)
-            Dense(64)  # 新增：将448维降为64维
+            Conv2D(32, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
+            BatchNormalization(),
+            Conv2D(64, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
+            Reshape((-1, input_shape[1] * 64)),         # 输入形状应为 (76, 13, 1)
+            Dense(64, kernel_regularizer=l2(l2_reg))  # 修正为l2(l2_reg)
         ])
 
-        # 时间分支保持不变
+        # 时间分支
         self.time_conv = Sequential([
-            Conv1D(64, 5, padding='causal'),
+            Conv1D(64, 3, padding='causal', kernel_regularizer=l2(l2_reg)),
             LayerNormalization(),
+            GRU(128, return_sequences=True),
             GRU(64, return_sequences=True)
         ])
 
         self.cross_attn = Attention(use_scale=True)
         self.classifier = Sequential([
-            Dense(64, activation='swish'),
+            Dense(64, activation='swish', kernel_regularizer=l2(l2_reg)),  # 修正为l2(l2_reg)
             Dropout(0.3),
             Dense(1, activation='sigmoid')
         ])
 
     def call(self, x):
-        f = self.freq_conv(x)           # 现在形状：(B,76,64)
-        t_input = tf.squeeze(x, axis=-1)
-        t = self.time_conv(t_input)     # 形状：(B,76,64)
-
-        attended = self.cross_attn([f, t])  # 维度已匹配
-        pooled = tf.reduce_mean(attended, axis=1)
+        # mfcc_model = create_mfcc_model()
+        f = self.freq_conv(x)               # 输出形状 (B, 76, 64)
+        t_input = tf.squeeze(x, axis=-1)    # 去除通道维度，形状 (B, 76, 13)
+        t = self.time_conv(t_input)         # 输出形状 (B, 76, 64)
+        attended = self.cross_attn([f, t])
+        pooled = tf.reduce_mean(attended, axis=1)  # 平均池化
         return self.classifier(pooled)
-
-
 
 # 测试模型
 if __name__ == "__main__":
-    # 单元测试代码
-    def test_reshape_dimension():
-        input_shape = (76, 13, 1)
-        model = EnhancedWakeModel(input_shape)
+    # 正确初始化参数
+    input_shape = (76, 13, 1)
+    l2_reg_value = 0.01  # 直接使用数值
 
-        # 模拟输入
-        test_input = tf.random.normal(shape=(32, 76, 13, 1))
-
-        # 前向传播跟踪
-        print("输入维度:", test_input.shape)  # (32,76,13,1)
-
-        x = model.freq_conv.layers[0](test_input)  # Conv2D
-        print("Conv2D后:", x.shape)  # (32,76,13,16)
-
-        x = model.freq_conv.layers[1](x)  # MaxPooling
-        print("MaxPool后:", x.shape)  # (32,76,7,16)
-
-        x = model.freq_conv.layers[2](x)  # DepthwiseConv2D
-        print("Depthwise后:", x.shape)  # (32,76,7,64)
-
-        x = model.freq_conv.layers[3](x)  # Reshape
-        print("Reshape后:", x.shape)  # (32,76,448)
-
-
-    test_reshape_dimension()
-
-    model = EnhancedWakeModel((76, 13, 1))
+    # 创建模型实例
+    model = EnhancedWakeModel(input_shape, l2_reg=l2_reg_value)
     model.build(input_shape=(None, 76, 13, 1))
     model.summary()
+
+    # 验证前向传播
+    test_input = tf.random.normal(shape=(32, 76, 13, 1))
+    output = model(test_input)
+    print("\n测试输出形状:", output.shape)  # 应为 (32, 1)

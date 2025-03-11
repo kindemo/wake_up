@@ -1,10 +1,13 @@
 import unittest
 import warnings
+from pathlib import Path
 from unittest.mock import patch
 
+import librosa
 import scipy.io.wavfile as wavfile
 import tensorflow as tf
 
+from src.preprocessing.Augmentation import AudioAugmenter
 from src.preprocessing.Spectrum_processing import get_mfcc
 from src.preprocessing.windowing import get_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
@@ -32,13 +35,8 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=31):
     # 将数据归一化到 [-1.0, 1.0]
     waveform = data / (tf.reduce_max(tf.abs(data)) + 1e-6)
 
-    try:
-        # 进行无重叠拼帧
-        windows = get_windows(waveform, frame_length, num_windows=num_win)
-    except Exception as e:
-        print(f"Error getting windows: {e}")
-        windows = tf.zeros([31, 400, 1], dtype=tf.float32)
-    # print(f"windows shape: {windows.shape}")
+    # 进行无重叠拼帧
+    windows = get_windows(waveform, frame_length, num_windows=num_win)
 
     # 测试标记
     channels = get_mfcc(windows, num_windows=num_win)
@@ -87,6 +85,18 @@ def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=31):
     wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
     wave = squeezing(wave)
     s_rate = tf.cast(s_rate, dtype=tf.float32)
+
+    # # 加载NOISEX-92数据集路径
+    # noise_paths = Path('D:/PycharmProjects/wark_by_voice/noisex-92-master')
+    # # 初始化增强器
+    # augmenter = AudioAugmenter(
+    #     noise_paths=noise_paths,
+    #     target_sr=16000
+    # )
+    # # 启用数据增强
+    # augmented = augmenter.augment(wave)
+    # # 验证长度保持
+    # assert len(augmented) == len(wave)  # True
     return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
 
 

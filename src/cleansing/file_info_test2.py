@@ -89,7 +89,7 @@ def scan_and_resample_wav_files(directory, target_rate=16000, target_bits=16):
 
 def main():
     # 指定要扫描的目录
-    data_directory = "D:/PycharmProjects/wark_by_voice/简略版数据集-420条语音/mobvoi_hotword_dataset"
+    data_directory = "D:/PycharmProjects/wark_by_voice/sample_train/zhou_wake"
     if not os.path.isdir(data_directory):
         logging.error("指定的路径不是一个有效的目录！")
         return

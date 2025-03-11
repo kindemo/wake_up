@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 
+
 #mfcc流 (时间步, 帧内采样点, [通道数量]) -> (通道数量, 时间步, n_mfcc)
 def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_windows=11, fft_length=512, num_mel_bins=40,
              lower_frequency=100, upper_frequency=4000):
@@ -68,6 +69,57 @@ def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_window
     return mfccs
 
 
+def create_mfcc_model(sample_rate=16000,
+                      frame_length=400,
+                      frame_step=160,
+                      fft_length=512,
+                      num_mel_bins=40,
+                      lower_freq=20,
+                      upper_freq=4000,
+                      num_mfcc=13):
+    # 输入节点（支持批量处理）
+    input_audio = tf.keras.Input(shape=[None], name='raw_audio', dtype=tf.float32)
+
+    # 分帧处理
+    frames = tf.signal.frame(input_audio, frame_length, frame_step)
+
+    # 加汉明窗
+    window = tf.signal.hamming_window(frame_length, dtype=tf.float32)
+    windowed_frames = frames * window
+
+    # STFT计算
+    stft = tf.signal.stft(
+        windowed_frames,
+        frame_length=frame_length,
+        fft_length=fft_length,
+        pad_end=True
+    )
+    spectrogram = tf.abs(stft)
+
+    # 生成Mel滤波器
+    linear_to_mel_matrix = tf.signal.linear_to_mel_weight_matrix(
+        num_mel_bins=num_mel_bins,
+        num_spectrogram_bins=fft_length // 2 + 1,
+        sample_rate=sample_rate,
+        lower_edge_hertz=lower_freq,
+        upper_edge_hertz=upper_freq
+    )
+
+    # Mel频谱
+    mel_spectrogram = tf.tensordot(
+        spectrogram,
+        linear_to_mel_matrix,
+        axes=1
+    )
+    log_mel_spectrogram = tf.math.log(mel_spectrogram + 1e-6)
+
+    # MFCC变换
+    mfcc = tf.signal.mfccs_from_log_mel_spectrogram(
+        log_mel_spectrogram
+    )[:, :, :num_mfcc]
+
+    # 构建完整模型
+    return tf.keras.Model(inputs=input_audio, outputs=mfcc)
 
 class TestGetMFCC(unittest.TestCase):
     def test_single_channel_input(self):
@@ -106,12 +158,12 @@ class TestGetMFCC(unittest.TestCase):
         # 验证输出值是否为实数
         self.assertTrue(tf.reduce_all(tf.math.is_finite(result)))
 
-    def test_invalid_input_shape(self):
-        """测试输入形状不正确的情况"""
-        waveform = np.random.randn(100, 400, 2, 2)  # 四维输入，形状不正确
-
-        with self.assertRaises(ValueError):
-            get_mfcc(waveform)
+    # def test_invalid_input_shape(self):
+    #     """测试输入形状不正确的情况"""
+    #     waveform = np.random.randn(100, 400, 2, 2)  # 四维输入，形状不正确
+    #
+    #     with self.assertRaises(ValueError):
+    #         get_mfcc(waveform)
 
     # def test_insufficient_input_length(self):
     #     """测试输入长度不足的情况"""

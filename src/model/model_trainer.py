@@ -8,13 +8,13 @@ import tensorflow as tf
 #     model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
 
 
-def compile_model(model, alpha_balance):
+def compile_model(model, gamma, alpha_balance):
     """
     weights: 正样本权重，等效于原加权交叉熵中的pos_weight
              推荐取值：负样本数 / 正样本数
     """
     loss_fn = FocalLoss(
-        gamma=2.0,           # 困难样本聚焦参数
+        gamma=gamma,           # 困难样本聚焦参数
         alpha=alpha_balance            # 类别平衡系数
     )
 
