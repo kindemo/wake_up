@@ -38,9 +38,13 @@ def split_audio_channels(wave, s_rate, frame_length=400, n_mfcc=13, num_win=31):
     # 进行无重叠拼帧
     windows = get_windows(waveform, frame_length, num_windows=num_win)
 
+    # print(f"windows shape: {windows.shape}")
     # 测试标记
-    channels = get_mfcc(windows, num_windows=num_win)
-    return tf.convert_to_tensor(channels, dtype=tf.float32)
+    # channels = get_mfcc(windows, num_windows=num_win)
+    # return tf.convert_to_tensor(channels, dtype=tf.float32)
+    return tf.convert_to_tensor(windows, dtype=tf.float32)
+
+
 
     # try:
     #     # 提取特征获取帧的多通道，假设返回形状为(num_channels, num_windows, n_mfcc)
@@ -97,6 +101,7 @@ def loading_file2channels(file_path, frame_length=400, n_mfcc=13, num_win=31):
     # augmented = augmenter.augment(wave)
     # # 验证长度保持
     # assert len(augmented) == len(wave)  # True
+
     return split_audio_channels(wave, s_rate, frame_length, n_mfcc, num_win)
 
 
@@ -120,7 +125,10 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
         [file_path, label],
         [tf.float32, tf.int32]
     )
-    channels.set_shape([None, sum_mfcc_frames, n_mfcc])
+
+    # 重点关注
+    # channels.set_shape([None, sum_mfcc_frames, n_mfcc])
+    channels.set_shape([None, num_win, frame_length])
     labels.set_shape([None])
     return channels, labels
 

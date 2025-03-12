@@ -23,8 +23,11 @@ class ExportModel(tf.Module):
         self.file_signature = self.__call__.get_concrete_function(
             x=tf.TensorSpec(shape=(), dtype=tf.string)
         )
+        # self.mfcc_signature = self.__call__.get_concrete_function(
+        #     x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32)
+        # )
         self.mfcc_signature = self.__call__.get_concrete_function(
-            x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32)
+            x=tf.TensorSpec(shape=[1, 31, 400], dtype=tf.float32)
         )
 
     @tf.function
@@ -46,7 +49,7 @@ class ExportModel(tf.Module):
                 s_rate = tf.cast(s_rate, dtype=tf.float32)
                 # 将音频划分为多个通道
                 channels = split_audio_channels(wave, s_rate, self.frame_length, self.n_mfcc, self.num_win)
-                channels = tf.expand_dims(channels, axis=-1)  # 添加通道维度
+                channels = tf.expand_dims(channels, axis=-1)    # 添加通道维度
                 results = self.model(channels, training=False)  # 模型预测
 
         elif x.dtype == tf.float32:

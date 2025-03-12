@@ -46,7 +46,7 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 1
+epochs = 10
 f_block = 16     # 每次从一类文件中取出几个
 a_balance = 0.7        # 控制样本平衡(更偏爱优化正类)
 gamma_punish = 0.5
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     # 模型构建
     # 此处根据实际情况调整 ！！！
-    model = EnhancedWakeModel((76, 13, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
+    model = EnhancedWakeModel((None, 31, 400, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
     compile_model(model, gamma_punish, a_balance)

@@ -66,7 +66,7 @@ def get_windows(waveform: tf.Tensor,
         num_windows: 每个大窗口包含的小帧数
 
     返回:
-        Tensor形状为（num_windows, frame_length, num_big_frames）
+        Tensor形状为（num_big_frames, num_windows, frame_length）
     """
     # 参数类型转换
     frame_length = tf.cast(frame_length, tf.int32)
@@ -122,10 +122,16 @@ def get_windows(waveform: tf.Tensor,
         big_frames,
         frame_length=frame_length,
         frame_step=frame_step,
+
         pad_end=False,
         axis=1
     )
-    return tf.transpose(small_frames, [1, 2, 0])
+    # 应用窗函数
+    window = tf.signal.hamming_window(frame_length, dtype=tf.float32)  # 使用汉明窗
+    small_frames = small_frames * window  # 将窗函数应用于每个小帧
+
+    # return tf.transpose(small_frames, [1, 2, 0])
+    return small_frames
 
 
 
