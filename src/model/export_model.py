@@ -5,29 +5,20 @@ from src.preprocessing.wave_processing import squeeze as squeezing
 
 
 class ExportModel(tf.Module):
-    def __init__(self, model, frame_length=400, n_mfcc=13, num_win=31):
+    def __init__(self, model, frame_length=400, n_mfcc=13, num_win=33):
         super().__init__()
         self.model = model
         self.frame_length = frame_length
         self.n_mfcc = n_mfcc
         self.num_win = num_win
 
-        # 注册方法的签名
-        # self.__call__.get_concrete_function(
-        #     x=tf.TensorSpec(shape=(), dtype=tf.string))
-        # # 直接输入特征图
-        # self.__call__.get_concrete_function(
-        #     x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32))
 
         # 生成具体签名并保存为属性
         self.file_signature = self.__call__.get_concrete_function(
             x=tf.TensorSpec(shape=(), dtype=tf.string)
         )
-        # self.mfcc_signature = self.__call__.get_concrete_function(
-        #     x=tf.TensorSpec(shape=[1, 76, 13, 1], dtype=tf.float32)
-        # )
-        self.mfcc_signature = self.__call__.get_concrete_function(
-            x=tf.TensorSpec(shape=[1, 31, 400], dtype=tf.float32)
+        self.wave_signature = self.__call__.get_concrete_function(
+            x=tf.TensorSpec(shape=[1, 13200], dtype=tf.float32)
         )
 
     @tf.function
@@ -48,7 +39,8 @@ class ExportModel(tf.Module):
 
                 s_rate = tf.cast(s_rate, dtype=tf.float32)
                 # 将音频划分为多个通道
-                channels = split_audio_channels(wave, s_rate, self.frame_length, self.n_mfcc, self.num_win)
+                channels = split_audio_channels(wave, self.frame_length, self.num_win)
+
                 channels = tf.expand_dims(channels, axis=-1)    # 添加通道维度
                 results = self.model(channels, training=False)  # 模型预测
 
@@ -64,8 +56,8 @@ class ExportModel(tf.Module):
         # print(results.shape)
 
         # 设置阈值并判断类别
-        threshold = 0.5
-        class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
+        # threshold = 0.5
+        # class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
 
         return {'predictions': results}
 

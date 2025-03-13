@@ -56,7 +56,7 @@
 # print("Class IDs:", class_ids)
 # print("Stacked Tensor:\n", stacked_tensor)
 #
-
+import numpy as np
 import tensorflow as tf
 from pathlib import Path
 
@@ -81,7 +81,7 @@ loaded_model = tf.saved_model.load(model_path)
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/verify/1_wake")
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
 data_dir = Path("D:/PycharmProjects/wark_by_voice")
-audio_file_path = str(data_dir / 'miya_long3.wav')
+audio_file_path = str(data_dir / '2025年03月07日 下午05点22分.m4a..wav')
 
 # print(list(loaded_model.signatures.keys()))  # 通常为 "serving_default"
 # infer = loaded_model.signatures["serving_default"]
@@ -94,13 +94,16 @@ output = loaded_model(input_data)
 
 # 获取输出结果
 predictions = output['predictions'].numpy()
-class_ids = output['class_ids'].numpy()
+class_ids = predictions >= 0.5
+print(f'class_ids.shape = {class_ids.shape}')
 
 # 生成时间轴
 time_step = 0.375  # 根据每个窗口的持续时间调整
-time_axis = [i * time_step for i in range(class_ids.shape[0])]
+time_axis = [i * time_step for i in range(predictions.shape[0])]
 
 # 组合结果
+
+
 stacked_result = list(zip(time_axis, class_ids))
 
 # 绘制图像

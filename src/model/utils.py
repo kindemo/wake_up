@@ -123,8 +123,6 @@ class CustomEarlyStopping(tf.keras.callbacks.Callback):
             #     self.best_model_path,
             #     signatures={"serving_default": serving_default}
             # )
-
-
         else:
             self.wait += 1
             if self.wait >= self.patience:

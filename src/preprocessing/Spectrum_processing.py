@@ -68,7 +68,7 @@ def get_mfcc(frame_wave, n_mfcc=13, frame_length=400, frame_step=160, num_window
 class TestGetMFCC(unittest.TestCase):
     def test_single_channel_input(self):
         """测试单通道输入"""
-        waveform = np.random.randn(31, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
+        waveform = np.random.randn(32, 400)  # 单通道输入，形状为 (帧时间步, 帧内采样点)
         n_mfcc = 13
 
         result = get_mfcc(waveform, n_mfcc=n_mfcc)
@@ -88,7 +88,7 @@ class TestGetMFCC(unittest.TestCase):
 
     def test_multi_channel_input(self):
         """测试多通道输入"""
-        waveform = np.random.randn(31, 400, 3)  # 多通道输入，形状为 (时间步, 帧内采样点, 通道数量)
+        waveform = np.random.randn(32, 400, 3)  # 多通道输入，形状为 (时间步, 帧内采样点, 通道数量)
         n_mfcc = 13
 
         result = get_mfcc(waveform, n_mfcc=n_mfcc)

@@ -75,16 +75,13 @@ class AudioAugmenter:
         return tf.squeeze(conv, axis=[0, -1])
 
     def _speed_perturbation(self, audio):
-        """完全兼容的相位声码器实现"""
         rate = tf.random.uniform([], 0.9, 1.1)
         original_length = tf.shape(audio)[0]
 
-        # STFT参数
         frame_length = 256
         frame_step = 64
         fft_length = 256
 
-        # 执行STFT
         stft = tf.signal.stft(
             audio,
             frame_length=frame_length,
@@ -92,34 +89,34 @@ class AudioAugmenter:
             fft_length=fft_length
         )
 
-        # 分解幅度和相位
         magnitude = tf.abs(stft)
         phase = tf.math.angle(stft)
 
-        # 相位差分计算
+        # print("magnitude shape:", magnitude.shape)  # (time_steps, freq_bins)
+        # print("phase shape:", phase.shape)  # (time_steps, freq_bins)
+
         phase_diff = phase[:, 1:] - phase[:, :-1]
         phase_diff = tf.where(phase_diff < 0, phase_diff + 2 * np.pi, phase_diff)
-
-        # 构建调整后的相位
         adjusted_phase = tf.cumsum(phase_diff * rate, axis=1)
 
-        # 创建复数相位因子（显式类型转换）
-        complex_phase = tf.complex(
-            tf.cos(adjusted_phase),
-            tf.sin(adjusted_phase)
-        )
+        # print("adjusted_phase shape:", adjusted_phase.shape)  # (time_steps, freq_bins - 1)
 
-        # 显式转换幅度为复数类型
-        complex_magnitude = tf.cast(magnitude[:, 1:-1], tf.complex64)
+        complex_magnitude = tf.cast(magnitude[:, :-1], tf.complex64)  # 裁剪最后一列
+        complex_phase = tf.complex(tf.cos(adjusted_phase), tf.sin(adjusted_phase))
 
-        # 构建新的STFT
+        # print("complex_magnitude shape:", complex_magnitude.shape)  # (time_steps, freq_bins - 1)
+        # print("complex_phase shape:", complex_phase.shape)  # (time_steps, freq_bins - 1)
+
         new_stft = tf.concat([
             tf.complex(magnitude[:, 0:1], 0.0),  # 首帧
             complex_magnitude * complex_phase,  # 中间帧
-            tf.complex(magnitude[:, -1:], 0.0)  # 末帧
+            tf.complex(magnitude[:, -1:], 0.0)[:, :-1]  # 裁剪末帧的最后一列
         ], axis=1)
 
-        # 逆STFT
+        # print("new_stft shape:", new_stft.shape)  # (time_steps, freq_bins)
+
+
+
         stretched = tf.signal.inverse_stft(
             new_stft,
             frame_length=frame_length,

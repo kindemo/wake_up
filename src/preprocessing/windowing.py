@@ -55,9 +55,9 @@ import tensorflow as tf
 def get_windows(waveform: tf.Tensor,
                 frame_length=400,
                 frame_step=400,
-                num_windows=31) -> tf.Tensor:
+                num_windows=33) -> tf.Tensor:
     """
-    改进版音频分帧处理，实现两阶段标准化分帧
+    改进版音频分帧处理，实现大分帧生成
 
     参数:
         waveform: 输入的1D音频信号Tensor
@@ -66,7 +66,7 @@ def get_windows(waveform: tf.Tensor,
         num_windows: 每个大窗口包含的小帧数
 
     返回:
-        Tensor形状为（num_big_frames, num_windows, frame_length）
+        Tensor形状为（num_big_frames, big_frame_length）
     """
     # 参数类型转换
     frame_length = tf.cast(frame_length, tf.int32)
@@ -117,21 +117,7 @@ def get_windows(waveform: tf.Tensor,
         handle_long
     )
 
-    # 第二阶段：分小帧并调整维度
-    small_frames = tf.signal.frame(
-        big_frames,
-        frame_length=frame_length,
-        frame_step=frame_step,
-
-        pad_end=False,
-        axis=1
-    )
-    # 应用窗函数
-    window = tf.signal.hamming_window(frame_length, dtype=tf.float32)  # 使用汉明窗
-    small_frames = small_frames * window  # 将窗函数应用于每个小帧
-
-    # return tf.transpose(small_frames, [1, 2, 0])
-    return small_frames
+    return big_frames
 
 
 
@@ -142,7 +128,7 @@ class TestGetWindows(tf.test.TestCase):
         waveform = tf.random.normal([15000])  # 音频信号长度为 15000
         frame_length = 400
         frame_step = 400
-        num_windows = 31
+        num_windows = 32
 
         result = get_windows(waveform, frame_length, frame_step, num_windows)
 
@@ -155,12 +141,12 @@ class TestGetWindows(tf.test.TestCase):
         waveform = tf.random.normal([4000])  # 音频长度刚好满足要求
         frame_length = 400
         frame_step = 400
-        num_windows = 31
+        num_windows = 32
 
         # 验证参数
         min_required_length = (num_windows - 1) * frame_step + frame_length
         min_required_length = tf.cast(min_required_length, tf.int32)
-        self.assertEqual(min_required_length, 12400)  # 确保最小所需长度为 4000
+        self.assertEqual(min_required_length, 12800)  # 确保最小所需长度为 4000
 
         result = get_windows(waveform, frame_length, frame_step, num_windows)
 

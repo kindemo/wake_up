@@ -46,7 +46,7 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 10
+epochs = 50
 f_block = 16     # 每次从一类文件中取出几个
 a_balance = 0.7        # 控制样本平衡(更偏爱优化正类)
 gamma_punish = 0.5
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     #     print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
 
 
-    dataset, label = preprocess_dataset(dataset, num_win=31)   # 加載自定義預處理
+    dataset, label = preprocess_dataset(dataset, num_win=33)   # 加載自定義預處理
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     # 模型构建
     # 此处根据实际情况调整 ！！！
-    model = EnhancedWakeModel((None, 31, 400, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
+    model = EnhancedWakeModel((None, 13200, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
     compile_model(model, gamma_punish, a_balance)
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     history = train_model(model, train_ds_four, val_ds_four, epochs, callbacks)
 
 
-    export = ExportModel(model, num_win=31)
+    export = ExportModel(model, num_win=32)
     # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
 
     # 保存模型, 显式声明签名
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         "D:/PycharmProjects/wark_by_voice/saved",
         signatures={
             "file_input": export.file_signature,
-            "mfcc_input": export.mfcc_signature
+            "wave_input": export.wave_signature
         }
     )
 
@@ -175,15 +175,15 @@ if __name__ == "__main__":
 
     # 取出频谱数据(一个批次必须大于9)
     # (batch, 76, 13) 三维
-    for e_g_spectrograms, example_spect_labels in train_ds.take(1):
-        # example_audio.shape: (10, 16000)
-        # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
-        # print(f"example_spect_labels.shape: {example_spect_labels.shape}")
-        # 绘制前九张的频谱图
-        plot_spectrograms(e_g_spectrograms, example_spect_labels, rows=3, cols=3, figsize=(16, 9))
-        input_shape = e_g_spectrograms.shape
-        print('Input shape:', input_shape)
-        break
+    # for e_g_spectrograms, example_spect_labels in train_ds.take(1):
+    #     # example_audio.shape: (10, 16000)
+    #     # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
+    #     # print(f"example_spect_labels.shape: {example_spect_labels.shape}")
+    #     # 绘制前九张的频谱图
+    #     plot_spectrograms(e_g_spectrograms, example_spect_labels, rows=3, cols=3, figsize=(16, 9))
+    #     input_shape = e_g_spectrograms.shape
+    #     print('Input shape:', input_shape)
+    #     break
 
 
     def plot_training_history(history, figsize=(16, 6)):
@@ -216,26 +216,73 @@ if __name__ == "__main__":
 
     print("开始输出混淆矩阵：")
     all_labels_class = ['0_non_wake', '1_wake']
-    # 绘制混淆矩阵(可以修改为应用test)
-    model.evaluate(val_ds_four, return_dict=True)
+    # 解批数据集并提取真实标签
+    y_true = tf.concat(list(val_ds_four.unbatch().map(lambda s, lab: lab)), axis=0)
+    print("y_true shape:", y_true.shape)
+    print("y_true:", y_true.numpy())
+
+    # 模型预测
     y_pred = model.predict(val_ds_four)
     y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+    print("y_pred_class shape:", y_pred_class.shape)
+    print("y_pred_class:", y_pred_class)
 
-    # 真实标签
-    y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
-    print("True labels:", y_true)
-    print("Predicted value:", y_pred)
-    print("Predicted labels:", y_pred_class)
+    # 确保长度一致
+    if len(y_true) != len(y_pred_class):
+        raise ValueError("y_true and y_pred_class have different lengths!")
 
+    # 计算混淆矩阵
     confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
+    print("Confusion Matrix:")
+    print(confusion_mtx.numpy())
+
+    # 绘制混淆矩阵
     plt.figure(figsize=(10, 8))
     sns.heatmap(confusion_mtx,
                 xticklabels=all_labels_class,
                 yticklabels=all_labels_class,
-                annot=True, fmt='g')
-    plt.xlabel('Prediction')
-    plt.ylabel('Label')
+                annot=True, fmt='g', cmap='Blues')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
     plt.show()
+
+
+
+
+
+
+
+
+
+
+
+    # all_labels_class = ['0_non_wake', '1_wake']
+    # # 绘制混淆矩阵(可以修改为应用test)
+    # val_ds_four = val_ds_four.unbatch()     # 确保解批次
+    #
+    # model.evaluate(val_ds_four, return_dict=True)
+    # y_pred = model.predict(val_ds_four)
+    # y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+    #
+    # # 真实标签
+    # y_true = tf.concat(list(val_ds_four.map(lambda s, lab: lab)), axis=0)
+    # # y_true = tf.concat(list(val_ds_four.map(lambda s,lab: lab)), axis=0)
+    # print("True labels:", y_true)
+    # # print("Predicted value:", y_pred)
+    # print("Predicted labels:", y_pred_class)
+    #
+    # confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
+    # print(confusion_mtx.numpy())
+    #
+    # plt.figure(figsize=(10, 8))
+    # sns.heatmap(confusion_mtx,
+    #             xticklabels=all_labels_class,
+    #             yticklabels=all_labels_class,
+    #             annot=True, fmt='g')
+    # plt.xlabel('Prediction')
+    # plt.ylabel('Label')
+    # plt.show()
 
     # 结束性能分析
     # tf.profiler.experimental.stop()
