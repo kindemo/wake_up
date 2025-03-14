@@ -67,7 +67,7 @@ model_path = "D:/PycharmProjects/wark_by_voice/saved"
 loaded_model = tf.saved_model.load(model_path)
 
 
-# # **
+# # ***
 # # 调用文件路径签名
 # loaded_model.signatures["file_input"](x=tf.constant("audio.wav"))
 
@@ -81,7 +81,7 @@ loaded_model = tf.saved_model.load(model_path)
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/verify/1_wake")
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/sample_train")
 data_dir = Path("D:/PycharmProjects/wark_by_voice")
-audio_file_path = str(data_dir / '2025年03月07日 下午05点22分.m4a..wav')
+audio_file_path = str(data_dir / '3月3日-上午9点29分.yp 1 11 16 35.wav')
 
 # print(list(loaded_model.signatures.keys()))  # 通常为 "serving_default"
 # infer = loaded_model.signatures["serving_default"]
@@ -98,7 +98,7 @@ class_ids = predictions >= 0.5
 print(f'class_ids.shape = {class_ids.shape}')
 
 # 生成时间轴
-time_step = 0.375  # 根据每个窗口的持续时间调整
+time_step = 0.4  # 根据每个窗口的持续时间调整
 time_axis = [i * time_step for i in range(predictions.shape[0])]
 
 # 组合结果

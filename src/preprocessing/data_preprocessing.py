@@ -19,6 +19,7 @@ def preprocess_data(train_ds, val_ds, norm_layer):
 
 
 
+
 # def preprocess_dataset(file_paths, labels, batch_size=32):
 #     # 创建 TensorFlow 数据集,将文件和标签关联
 #     dataset = tf.data.Dataset.from_tensor_slices((file_paths, labels))

@@ -1,5 +1,8 @@
 import tensorflow as tf
 
+from src.preprocessing.Pretreatment import split_audio_windows
+
+
 # 模拟 split_audio_channels 函数，其中包含 assert 断言
 def split_audio_channels(file_path_str):
     # 模拟一个断言错误
@@ -21,7 +24,7 @@ def load_and_split_audio(file_path, label):
             else:
                 raise TypeError("file_path_py must be of type bytes or str")  # 如果不是这两种类型，抛出错误
             # 划分为多个通道
-            channels = split_audio_channels(file_path_str)
+            channels = split_audio_windows(file_path_str)
             labels = tf.repeat(label_py, repeats=tf.shape(channels)[0])  # 为每个通道重复标签
             return channels, labels
         except Exception as e:

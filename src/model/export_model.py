@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from src.preprocessing.Pretreatment import split_audio_channels
+from src.preprocessing.Pretreatment import split_audio_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
 
 
@@ -32,43 +32,33 @@ class ExportModel(tf.Module):
                 # 用tensorflow自带的库
                 audio_binary = tf.io.read_file(x)
                 wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
-                # 将音频数据转换为 tf.float32 类型
-                wave = tf.cast(wave, dtype=tf.float32)
-                # print("ExportModel’s wave shape before squeeze:", wave.shape)
-                wave = squeezing(wave)
+                wave = squeezing(wave)      # 声道融合得到维度为1的音频
 
-                s_rate = tf.cast(s_rate, dtype=tf.float32)
                 # 将音频划分为多个通道
-                channels = split_audio_channels(wave, self.frame_length, self.num_win)
-
-                channels = tf.expand_dims(channels, axis=-1)    # 添加通道维度
-                results = self.model(channels, training=False)  # 模型预测
+                windows = split_audio_windows(wave, self.frame_length, self.num_win)
+                results = self.model(windows, training=False)  # 模型预测
 
         elif x.dtype == tf.float32:
-            # 需要改进
-            mfcc = x
-            mfcc = tf.cast(mfcc, dtype=tf.float32)
-            results = self.model(mfcc, training=False)  # 模型预测
+            # （逐样本独立归一化）
+            # max_abs = tf.reduce_max(tf.abs(x), axis=1, keepdims=True)
+            # waveform = x / (max_abs + 1e-6)
+
+            # 步骤2：手动归一化, 如果已经归一化则不必，仿照tf decode
+            waveform = (x + 32768) / 65535 if tf.reduce_max(x) > 1 else x
+            results = self.model(waveform, training=False)  # 模型预测
         else:
             raise ValueError("Unsupported input type. Expected file path or audio data.")
+        return {'predictions': results}
+
+
+
 
 
         # print(results.shape)
-
         # 设置阈值并判断类别
         # threshold = 0.5
         # class_ids = tf.cast(results >= threshold, dtype=tf.int32)  # 形状为 (num_channels, num_classes)
-
-        return {'predictions': results}
-
         # , 'class_ids': class_ids
-
-
-
-
-
-
-
 
 
         # # 使用 tf.TensorArray 替代 Python 列表

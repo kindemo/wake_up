@@ -65,6 +65,18 @@ class FocalLoss(tf.keras.losses.Loss):
             tf.equal(y_true, 1.0), self.alpha, 1 - self.alpha
         )
 
+        # # 打印 alpha_factor, focal_factor, bce
+        # print_op = tf.print(
+        #     "alpha_factor:", alpha_factor,
+        #     "focal_factor:", focal_factor,
+        #     "bce:", bce,
+        #     output_stream=sys.stdout
+        # )
+        #
+        # # 确保打印操作在损失计算之前执行
+        # with tf.control_dependencies([print_op]):
+        #     loss = tf.reduce_mean(alpha_factor * focal_factor * bce)
+        # return loss
         return tf.reduce_mean(alpha_factor * focal_factor * bce)
 
 

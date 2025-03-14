@@ -48,8 +48,8 @@ def convert_to_16bit_wav(input_path, output_path):
 Batch = 128     # 训练样本数量
 epochs = 50
 f_block = 16     # 每次从一类文件中取出几个
-a_balance = 0.7        # 控制样本平衡(更偏爱优化正类)
-gamma_punish = 0.5
+a_balance = 0.6        # 控制样本平衡(更偏爱优化正类)
+gamma_punish = 1
 l2_reg = 1e-4
 
 # # 设定一个固定的 buffer_size
@@ -118,25 +118,25 @@ if __name__ == "__main__":
     # print(f"norm Audio shape: {train_ds.element_spec[0].shape}")
     # print(f"norm Label shape: {train_ds.element_spec[1].shape}")
 
-    # 扩展维度到四维便于卷积输出
-    # 定义一个函数来扩展维度
-    def expand_dims(data, label):
-        data = tf.expand_dims(data, axis=-1)  # 扩展数据的维度
-        return data, label
+    # # 扩展维度到四维便于卷积输出
+    # # 定义一个函数来扩展维度
+    # def expand_dims(data, label):
+    #     data = tf.expand_dims(data, axis=-1)  # 扩展数据的维度
+    #     return data, label
+    #
+    # # 使用 map 函数将维度扩展应用于每个元素
+    # train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+    # val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # 使用 map 函数将维度扩展应用于每个元素
-    train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
-    val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+    # # 打印前几个元素验证标签分配
+    # for element in train_ds_four.take(1):
+    #     slices, label = element
+    #     print(f"batch slices: {tf.shape(slices).numpy()}, Label: {label.numpy()}")
+    #
+    # print("expand train Audio element spec:", train_ds_four.element_spec)
+    # print("expand Validation dataset element spec:", val_ds_four.element_spec)
 
-    # 打印前几个元素验证标签分配
-    for element in train_ds_four.take(1):
-        slices, label = element
-        print(f"batch slices: {tf.shape(slices).numpy()}, Label: {label.numpy()}")
-
-    print("expand train Audio element spec:", train_ds_four.element_spec)
-    print("expand Validation dataset element spec:", val_ds_four.element_spec)
-
-    print("卷积输入维度扩展定义完成")
+    print("卷积输入维度定义完成")
 
     # # 强制加载所有数据
     # all_data = list(dataset)  # 将所有数据加载到内存
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     # 模型构建
     # 此处根据实际情况调整 ！！！
-    model = EnhancedWakeModel((None, 13200, 1), l2_reg)  # 输入形状应该是 (76, 13, 1)
+    model = EnhancedWakeModel(l2_reg=l2_reg)
 
     # 模型编译（非对称交叉熵，使模型更关注正类
     compile_model(model, gamma_punish, a_balance)
@@ -154,10 +154,10 @@ if __name__ == "__main__":
         CustomEarlyStopping(patience=3, train_accuracy_threshold=0.9),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
     ]
-    history = train_model(model, train_ds_four, val_ds_four, epochs, callbacks)
+    history = train_model(model, train_ds, val_ds, epochs, callbacks)
 
 
-    export = ExportModel(model, num_win=32)
+    export = ExportModel(model, num_win=33)
     # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
 
     # 保存模型, 显式声明签名
@@ -217,12 +217,12 @@ if __name__ == "__main__":
     print("开始输出混淆矩阵：")
     all_labels_class = ['0_non_wake', '1_wake']
     # 解批数据集并提取真实标签
-    y_true = tf.concat(list(val_ds_four.unbatch().map(lambda s, lab: lab)), axis=0)
+    y_true = tf.concat(list(val_ds.unbatch().map(lambda s, lab: lab)), axis=0)
     print("y_true shape:", y_true.shape)
     print("y_true:", y_true.numpy())
 
     # 模型预测
-    y_pred = model.predict(val_ds_four)
+    y_pred = model.predict(val_ds)
     y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
     print("y_pred_class shape:", y_pred_class.shape)
     print("y_pred_class:", y_pred_class)
