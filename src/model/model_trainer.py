@@ -1,5 +1,5 @@
 # model_trainer.py
-from src.model.utils import weighted_binary_crossentropy, FocalLoss
+from src.model.utils import FocalLoss
 import tensorflow as tf
 
 # # adam优化器
@@ -24,7 +24,13 @@ def compile_model(model, gamma, alpha_balance):
         metrics=[
             'accuracy',
             tf.keras.metrics.Precision(name='prec'),
-            tf.keras.metrics.Recall(name='rec')
+            tf.keras.metrics.Recall(name='rec'),
+            tf.keras.metrics.AUC(name='auc'),  # 默认计算 ROC-AUC
+            tf.keras.metrics.AUC(name='pr_auc', curve='PR'),  # 计算 PR-AUC
+            tf.keras.metrics.TruePositives(name='tp'),
+            tf.keras.metrics.FalsePositives(name='fp'),
+            tf.keras.metrics.TrueNegatives(name='tn'),
+            tf.keras.metrics.FalseNegatives(name='fn')
         ]
     )
 
