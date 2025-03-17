@@ -40,9 +40,8 @@ def scan_wav_files(directory):
 
 def main():
     # 指定要扫描的目录
-    data_directory = "D:/PycharmProjects/wark_by_voice/sample_train/0_non_wake"
-    # data_directory = "D:/PycharmProjects/wark_by_voice/简略版数据集-420条语音/mobvoi_hotword_dataset_resources"
-    # data_directory = "D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav/1_wake_words"
+
+    data_directory = "D:\PycharmProjects\wark_by_voice\原素材\HuanJing_dev"
     if not os.path.isdir(data_directory):
         logging.error("指定的路径不是一个有效的目录！")
         return

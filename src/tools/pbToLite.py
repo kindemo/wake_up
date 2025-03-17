@@ -31,7 +31,7 @@ logging.basicConfig(level=logging.INFO)
 tflite_model = converter.convert()
 
 # 保存为 .tflite 文件
-with open("model_wave2.tflite", "wb") as f:
+with open("model_wave3.tflite", "wb") as f:
     f.write(tflite_model)
 
 

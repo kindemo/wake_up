@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 # 测试TFLite模型是否正常工作
-interpreter = tf.lite.Interpreter("model_wave2.tflite")
+interpreter = tf.lite.Interpreter("model_wave3.tflite")
 
 interpreter.allocate_tensors()
 

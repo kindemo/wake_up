@@ -12,33 +12,6 @@ def weighted_binary_crossentropy(weights):
     return loss
 
 
-# class WeightedFocalLoss(tf.keras.losses.Loss):
-#     """支持样本权重与Focal机制的统一损失函数"""
-#
-#     def __init__(self, pos_weight=1.0, gamma=2.0, alpha=0.25):
-#         super().__init__()
-#         self.pos_weight = pos_weight
-#         self.gamma = gamma
-#         self.alpha = alpha
-#
-#     def call(self, y_true, y_pred):
-#         # 带权重的交叉熵基底
-#         bce = tf.nn.weighted_cross_entropy_with_logits(
-#             y_true, y_pred, pos_weight=self.pos_weight
-#         )
-#
-#         # Focal调制因子
-#         p = tf.sigmoid(y_pred)  # 将logits转为概率
-#         pt = tf.where(tf.equal(y_true, 1), p, 1 - p)  # 样本预测置信度
-#         focal_factor = (1 - pt)  ** self.gamma
-#
-#         # 类别平衡因子
-#         alpha_factor = tf.where(
-#             tf.equal(y_true, 1), self.alpha, 1 - self.alpha
-#         )
-#
-#         return tf.reduce_mean(alpha_factor * focal_factor * bce)
-
 class FocalLoss(tf.keras.losses.Loss):
     """支持 Focal 机制的损失函数（不带样本权重）"""
 

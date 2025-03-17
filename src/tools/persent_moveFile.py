@@ -3,6 +3,8 @@ import shutil
 import random
 
 def move_wav_files_randomly(parent_folder, new_folder_name, percent):
+    selected_files = set()  # 在函数开头初始化
+
     # 创建一个新的文件夹，如果不存在的话
     new_folder_path = os.path.join(parent_folder, new_folder_name)
     if not os.path.exists(new_folder_path):
@@ -16,7 +18,7 @@ def move_wav_files_randomly(parent_folder, new_folder_name, percent):
                 os.unlink(file_path)  # 删除文件或链接
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)  # 删除子文件夹
-        print("代存目标文件夹内容已经存在，已经预先清空")
+        print("目标文件夹内容已经存在，已经预先清空")
 
     # 收集所有.wav文件的完整路径
     all_wav_files = []
@@ -26,33 +28,29 @@ def move_wav_files_randomly(parent_folder, new_folder_name, percent):
 
     # 计算需要随机选取的文件数量
     num_to_select = int(len(all_wav_files) * percent)
-    if num_to_select > 0:
-        selected_files = set()  # 用于记录已经选择的文件路径
-        while len(selected_files) < num_to_select:
-            # 随机选择一个文件
-            random_file = random.choice(all_wav_files)
-            file_name = os.path.basename(random_file)
-            destination_path = os.path.join(new_folder_path, file_name)
+    if num_to_select <= 0:
+        print("没有需要移动的文件（文件列表为空或百分比过低）。")
+        print(f"随机选取并移动文件完成！总共移动了 {len(selected_files)} 个文件。")
+        return
 
-            # 检查目标文件夹是否已经存在同名文件
-            if not os.path.exists(destination_path):
-                selected_files.add(random_file)  # 记录已选择的文件
-                shutil.copy2(random_file, destination_path)
-                # print(f"复制文件：{random_file} -> {destination_path}")
-            else:
-                print(f"跳过文件（目标文件夹中已存在）：{file_name}")
+    while len(selected_files) < num_to_select:
+        # 随机选择一个文件
+        random_file = random.choice(all_wav_files)
+        file_name = os.path.basename(random_file)
+        destination_path = os.path.join(new_folder_path, file_name)
 
-    print(f"随机选取并复制.wav文件完成！总共复制了 {len(selected_files)} 个文件。")
+        # 检查目标文件夹是否已经存在同名文件
+        if not os.path.exists(destination_path):
+            selected_files.add(random_file)  # 记录已选择的文件
+            shutil.move(random_file, destination_path)
+        else:
+            print(f"跳过文件（目标文件夹中已存在）：{file_name}")
+
+    print(f"随机选取并移动文件完成！总共移动了 {len(selected_files)} 个文件。")
 
 # 使用示例
-# parent_folder = r"D:\PycharmProjects\wark_by_voice\简略版数据集-420条语音\mobvoi_hotword_dataset"  #   验证
-# parent_folder = r"D:\PycharmProjects\wark_by_voice\we_train\train\SPEECHDATA\wav"  # 替换为你的父文件夹路径
-parent_folder = r"D:\BaiduNetdiskDownload\环境场景音效包\【环境】音效"
-# parent_folder = r"D:\PycharmProjects\wark_by_voice\AISHELL-WakeUp-1-sample\SPEECHDATA\speech\wav\1_wake_words"
-parent_folder = r"D:\PycharmProjects\wark_by_voice\sample_train\大数据量预存\唤醒词"
-
-new_folder_name = "wav_files"  # 新文件夹的名称
+parent_folder = r"D:\PycharmProjects\wark_by_voice\train_sample\0_non_wake"
+new_folder_name = "1_wake_dev"  # 新文件夹的名称
 percent = 0.1  # 随机选取的百分比，例如0.5表示选取50%
 
 move_wav_files_randomly(parent_folder, new_folder_name, percent)
-

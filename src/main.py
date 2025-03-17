@@ -16,10 +16,6 @@ from draw import *
 from src.model.export_model import *
 from src.preprocessing.Pretreatment import *
 from data_loader import *
-
-# 设置 absl 日志级别为 WARNING
-# logging.set_verbosity(logging.WARNING)
-
 gc.collect()    # 清理不必要的内存
 
 # 动态分配内存
@@ -46,10 +42,10 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 50
+epochs = 1
 f_block = 16     # 每次从一类文件中取出几个
-a_balance = 0.6        # 控制样本平衡(更偏爱优化正类)
-gamma_punish = 1
+a_balance = 0.5        # 控制样本平衡(更偏爱优化负类)
+gamma_punish = 0.5
 l2_reg = 1e-4
 
 # # 设定一个固定的 buffer_size
@@ -60,73 +56,51 @@ l2_reg = 1e-4
 if __name__ == "__main__":
     print("Eager Execution Enabled:", tf.executing_eagerly())
     configure_gpu()     # 启用gpu,动态分配内存
-    # tf.profiler.experimental.start('log_dir')
 
-    # data_dir = "D:/PycharmProjects/wark_by_voice/AISHELL-WakeUp-1-sample/SPEECHDATA/speech/wav"
-    data_dir = "D:/PycharmProjects/wark_by_voice/sample_train"
-    # data_dir = "D:/PycharmProjects/wark_by_voice/verify"
+    data_dir = "D:/PycharmProjects/wark_by_voice/train_sample"
+    data_dev_dir = "D:/PycharmProjects/wark_by_voice/dev_sample"
 
-
-    # 跟踪张量形状变化
-    # tf.debugging.set_log_device_placement(True)
 
     file_paths, labels = load_dataset(data_dir)  # 加载模型训练文件
-    dataset = create_interleaved_dataset(file_paths, labels, block_size=f_block)
+    dataset = create_interleaved_dataset(file_paths, labels, block_size=f_block)        # 路径和标签绑定的dataset
+
+    dev_file_paths, labels_dev = load_dataset(data_dev_dir)  # 加载模型训练文件
+    dataset_dev = create_interleaved_dataset(dev_file_paths, labels_dev, block_size=f_block)  # 路径和标签绑定的dataset dev
 
     # # 打印前几个元素验证标签分配
-    # for element in dataset.take(15):
-    #     file_path, label = element
-    #     print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
+    for element in dataset.take(15):
+        file_path, label = element
+        print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
 
 
-    dataset, label = preprocess_dataset(dataset, num_win=33)   # 加載自定義預處理
+    dataset, labels = preprocess_dataset(dataset, num_win=33)              # train 加載自定義預處理
+    dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=33)  # dev 加載自定義預處理
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
     #     print("数据加载完成，第一个批次：", batch)
 
-
-    # 划分为训练集和验证集
-    # 尝试获取 cardinality
-    cardinality = dataset.cardinality().numpy()
-    if cardinality == tf.data.UNKNOWN_CARDINALITY:
-        # 手动计算大小
-        total_size = sum(1 for _ in dataset)
-    elif cardinality == tf.data.INFINITE_CARDINALITY:
-        raise ValueError("数据集无限，无法划分")
-    else:
-        total_size = cardinality
-        print(f"total size: {total_size}")
-
-    train_size = int(total_size * 0.8)
-    train_ds = dataset.take(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
-    val_ds = dataset.skip(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
+    train_ds = dataset.batch(Batch).prefetch(tf.data.AUTOTUNE)
+    val_ds = dataset_dev.batch(Batch).prefetch(tf.data.AUTOTUNE)
 
     # 检查数据集的输出形状
     print(f'train_da_shape:{train_ds.element_spec}')
 
     # 打印数据集的批次形状
     audio_shape = train_ds.element_spec[0].shape
+    dev_audio_shape = val_ds.element_spec[0].shape
     label_shape = train_ds.element_spec[1].shape
-    print(f"Audio shape: {audio_shape}")
+    print(f"Train Audio shape: {audio_shape}")
+    print(f"Dev Audio shape: {audio_shape}")
     print(f"Label shape: {label_shape}")
 
     # 数据归一化
-    norm_layer = normalize_data(train_ds, val_ds)
-    train_ds, val_ds = preprocess_data(train_ds, val_ds, norm_layer)
+    # norm_layer = normalize_data(train_ds, val_ds)
+    # train_ds, val_ds = preprocess_data(train_ds, val_ds, norm_layer)
 
     # print(f"norm Audio shape: {train_ds.element_spec[0].shape}")
     # print(f"norm Label shape: {train_ds.element_spec[1].shape}")
 
-    # # 扩展维度到四维便于卷积输出
-    # # 定义一个函数来扩展维度
-    # def expand_dims(data, label):
-    #     data = tf.expand_dims(data, axis=-1)  # 扩展数据的维度
-    #     return data, label
-    #
-    # # 使用 map 函数将维度扩展应用于每个元素
-    # train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
-    # val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
 
     # # 打印前几个元素验证标签分配
     # for element in train_ds_four.take(1):
@@ -158,6 +132,7 @@ if __name__ == "__main__":
 
 
     export = ExportModel(model, num_win=33)
+
     # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
 
     # 保存模型, 显式声明签名
@@ -169,22 +144,7 @@ if __name__ == "__main__":
             "wave_input": export.wave_signature
         }
     )
-
     print("end")
-
-
-    # 取出频谱数据(一个批次必须大于9)
-    # (batch, 76, 13) 三维
-    # for e_g_spectrograms, example_spect_labels in train_ds.take(1):
-    #     # example_audio.shape: (10, 16000)
-    #     # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
-    #     # print(f"example_spect_labels.shape: {example_spect_labels.shape}")
-    #     # 绘制前九张的频谱图
-    #     plot_spectrograms(e_g_spectrograms, example_spect_labels, rows=3, cols=3, figsize=(16, 9))
-    #     input_shape = e_g_spectrograms.shape
-    #     print('Input shape:', input_shape)
-    #     break
-
 
     def plot_training_history(history, figsize=(16, 6)):
         import matplotlib.pyplot as plt
@@ -223,9 +183,9 @@ if __name__ == "__main__":
 
     # 模型预测
     y_pred = model.predict(val_ds)
-    y_pred_class = tf.cast(y_pred >= 0.5, tf.int32).numpy().flatten()
+    y_pred_class = tf.cast(y_pred > 0.5, tf.int32).numpy().flatten()
     print("y_pred_class shape:", y_pred_class.shape)
-    print("y_pred_class:", y_pred_class)
+    print("y_pred:", y_pred)
 
     # 确保长度一致
     if len(y_true) != len(y_pred_class):
@@ -253,7 +213,47 @@ if __name__ == "__main__":
 
 
 
+    # 划分为训练集和验证集
+    # 尝试获取 cardinality
+    # cardinality = dataset.cardinality().numpy()
+    # if cardinality == tf.data.UNKNOWN_CARDINALITY:
+    #     # 手动计算大小
+    #     total_size = sum(1 for _ in dataset)
+    # elif cardinality == tf.data.INFINITE_CARDINALITY:
+    #     raise ValueError("数据集无限，无法划分")
+    # else:
+    #     total_size = cardinality
+    #     print(f"total size: {total_size}")
+    #
+    # train_size = int(total_size * 0.8)
+    # train_ds = dataset.take(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
+    # val_ds = dataset.skip(train_size).batch(Batch).prefetch(tf.data.AUTOTUNE)
 
+
+
+    # # 扩展维度到四维便于卷积输出
+    # # 定义一个函数来扩展维度
+    # def expand_dims(data, label):
+    #     data = tf.expand_dims(data, axis=-1)  # 扩展数据的维度
+    #     return data, label
+    #
+    # # 使用 map 函数将维度扩展应用于每个元素
+    # train_ds_four = train_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+    # val_ds_four = val_ds.map(expand_dims, num_parallel_calls=tf.data.AUTOTUNE)
+
+
+
+    # 取出频谱数据(一个批次必须大于9)
+    # (batch, 76, 13) 三维
+    # for e_g_spectrograms, example_spect_labels in train_ds.take(1):
+    #     # example_audio.shape: (10, 16000)
+    #     # print(f"example_spectrograms.shape: {e_g_spectrograms.shape}")
+    #     # print(f"example_spect_labels.shape: {example_spect_labels.shape}")
+    #     # 绘制前九张的频谱图
+    #     plot_spectrograms(e_g_spectrograms, example_spect_labels, rows=3, cols=3, figsize=(16, 9))
+    #     input_shape = e_g_spectrograms.shape
+    #     print('Input shape:', input_shape)
+    #     break
 
 
 

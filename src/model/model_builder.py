@@ -83,27 +83,83 @@ class MFCCPreprocess(Layer):
         return input_shape[0], num_frames, self.n_mfcc
 
 
+# class EnhancedWakeModel(Model):
+#     def __init__(self, n_mfcc=13, l2_reg=1e-4):  # 默认值设为1e-4
+#         super(EnhancedWakeModel, self).__init__()
+#
+#         # self.frameLayer = FrameLayer(frame_length=400, frame_step=160)
+#
+#
+#         # 添加MFCC预处理层
+#         self.mfcc_preprocess = MFCCPreprocess(
+#             n_mfcc=n_mfcc,
+#             frame_length=400,
+#             frame_step=160
+#         )
+#
+#         # 时频分支（移除池化层，修正正则化器）
+#         self.freq_conv = Sequential([
+#             Conv2D(32, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
+#             BatchNormalization(),
+#             Conv2D(64, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
+#             tf.keras.layers.Reshape((-1, 13 * 64)),  # 输出形状 (batch, 832)
+#             Dense(64, kernel_regularizer=l2(l2_reg))  # 修正为l2(l2_reg)
+#         ])
+#
+#         # 时间分支
+#         self.time_conv = Sequential([
+#             Conv1D(64, 3, padding='causal', kernel_regularizer=l2(l2_reg)),
+#             LayerNormalization(),
+#             GRU(128, return_sequences=True),
+#             GRU(64, return_sequences=True)
+#         ])
+#
+#         self.cross_attn = Attention(use_scale=True)
+#         self.classifier = Sequential([
+#             Dense(64, activation='swish', kernel_regularizer=l2(l2_reg)),  # 修正为l2(l2_reg)
+#             Dropout(0.3),
+#             Dense(1, activation='sigmoid')
+#         ])
+#
+#     def call(self, x):
+#         # MFCC预处理 输入形状 (B, 13200) 输出81帧 (B, 81, 13)
+#         x = self.mfcc_preprocess(x)
+#
+#         # 时频分支处理
+#         t_input = tf.expand_dims(x, axis=-1)    # 添加通道维度 -> （B, 81, 13, 1）
+#         f = self.freq_conv(t_input)             # 输出形状 (B, 81, 64)
+#
+#         # 时间分支处理
+#         t = self.time_conv(x)  # 输入形状 （B，81， 13）
+#
+#         # 注意力机制
+#         attended = self.cross_attn([f, t])
+#         pooled = tf.reduce_mean(attended, axis=1)
+#         return self.classifier(pooled)
+
+
+# 含有归一化
 class EnhancedWakeModel(Model):
-    def __init__(self, n_mfcc=13, l2_reg=1e-4):  # 默认值设为1e-4
+    def __init__(self, n_mfcc=13, l2_reg=1e-4):
         super(EnhancedWakeModel, self).__init__()
 
-        # self.frameLayer = FrameLayer(frame_length=400, frame_step=160)
-
-
-        # 添加MFCC预处理层
         self.mfcc_preprocess = MFCCPreprocess(
             n_mfcc=n_mfcc,
             frame_length=400,
             frame_step=160
         )
 
-        # 时频分支（移除池化层，修正正则化器）
+        # 定义所有归一化层
+        self.bn_input = BatchNormalization()  # 输入归一化层
+
+        # 时频分支
         self.freq_conv = Sequential([
             Conv2D(32, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
             BatchNormalization(),
             Conv2D(64, (3, 3), padding='same', kernel_regularizer=l2(l2_reg)),
-            tf.keras.layers.Reshape((-1, 13 * 64)),  # 输出形状 (batch, 832)
-            Dense(64, kernel_regularizer=l2(l2_reg))  # 修正为l2(l2_reg)
+            BatchNormalization(),
+            tf.keras.layers.Reshape((-1, 13 * 64)),
+            Dense(64, kernel_regularizer=l2(l2_reg))
         ])
 
         # 时间分支
@@ -116,21 +172,22 @@ class EnhancedWakeModel(Model):
 
         self.cross_attn = Attention(use_scale=True)
         self.classifier = Sequential([
-            Dense(64, activation='swish', kernel_regularizer=l2(l2_reg)),  # 修正为l2(l2_reg)
+            Dense(64, activation='swish', kernel_regularizer=l2(l2_reg)),
             Dropout(0.3),
             Dense(1, activation='sigmoid')
         ])
 
     def call(self, x):
-        # MFCC预处理 输入形状 (B, 13200) 输出81帧 (B, 81, 13)
-        x = self.mfcc_preprocess(x)
+        # 预处理
+        x = self.mfcc_preprocess(x)  # 输出形状 (B, 81, 13)
+        x = self.bn_input(x)  # 使用预定义的归一化层
 
-        # 时频分支处理
-        t_input = tf.expand_dims(x, axis=-1)    # 添加通道维度 -> （B, 81, 13, 1）
-        f = self.freq_conv(t_input)             # 输出形状 (B, 81, 64)
+        # 时频分支
+        t_input = tf.expand_dims(x, axis=-1)
+        f = self.freq_conv(t_input)
 
-        # 时间分支处理
-        t = self.time_conv(x)  # 输入形状 （B，81， 13）
+        # 时间分支
+        t = self.time_conv(x)
 
         # 注意力机制
         attended = self.cross_attn([f, t])
@@ -141,10 +198,20 @@ class EnhancedWakeModel(Model):
 # 测试模型
 if __name__ == "__main__":
 
-    test_input = tf.random.normal(shape=(5, 13200))  # 批次大小为1
+    # test_input = tf.random.normal(shape=(5, 13200))  # 批次大小为1
+    # model = EnhancedWakeModel()
+    # model(test_input)  # 触发动态构建
+    # model.summary()
+
+    # 测试模型构建
     model = EnhancedWakeModel()
-    model(test_input)  # 触发动态构建
+    model.build(input_shape=(None, 13200))  # 输入维度匹配原始数据
     model.summary()
+
+    # 验证前向传播
+    test_input = tf.random.normal((32, 13200))  # 批量大小为32的示例输入
+    output = model(test_input)
+    print(output.shape)  # 应输出 (32, 1)
 
 
 
