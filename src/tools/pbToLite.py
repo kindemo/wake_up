@@ -1,5 +1,4 @@
 import logging
-
 import tensorflow as tf
 
 # 加载 SavedModel 格式的模型

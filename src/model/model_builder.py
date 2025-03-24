@@ -1,8 +1,7 @@
-from keras import Input
+
 from keras.layers import BatchNormalization
 from keras.regularizers import l2
 from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import Reshape
 import tensorflow as tf
 from tensorflow.keras.layers import Layer, Conv2D, BatchNormalization, Dense, Conv1D, GRU, Dropout, LayerNormalization
 from tensorflow.keras.models import Model

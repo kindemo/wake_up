@@ -157,98 +157,11 @@ def process_wav_files(input_folder, output_folder):
     print("Processing complete!")
 
 
-# class TestDelSignalIni(tf.test.TestCase):
-#
-#     @patch(__name__ + '.endpoint_detection')
-#     def test_single_channel_input(self, mock_endpoint_detection):
-#         # 模拟 endpoint_detection 函数的返回值
-#         mock_result = tf.random.normal([50])
-#         mock_endpoint_detection.return_value = mock_result
-#
-#         # 生成单声道测试数据
-#         sr = 16000
-#         data = tf.random.normal([10000])
-#
-#         result = del_signal_ini(sr, data)
-#
-#         # 检查输出类型
-#         self.assertIsInstance(result, tf.Tensor)
-#         # 检查输出是否为一维张量
-#         self.assertEqual(result.shape.ndims, 1)
-#         # 检查输出长度是否与模拟返回值长度一致
-#         self.assertEqual(result.shape[0], mock_result.shape[0])
-#
-#     @patch(__name__ + '.endpoint_detection')
-#     def test_multi_channel_input(self, mock_endpoint_detection):
-#         # 模拟 endpoint_detection 函数的返回值
-#         mock_result = tf.random.normal([50])
-#         mock_endpoint_detection.return_value = mock_result
-#
-#         # 生成多声道测试数据
-#         sr = 16000
-#         data = tf.random.normal([10000, 2])
-#
-#         result = del_signal_ini(sr, data)
-#
-#         # 检查输出类型
-#         self.assertIsInstance(result, tf.Tensor)
-#         # 检查输出是否为一维张量
-#         self.assertEqual(result.shape.ndims, 1)
-#         # 检查输出长度是否与模拟返回值长度一致
-#         self.assertEqual(result.shape[0], mock_result.shape[0])
-#
-#     def test_endpoint_detection(self):
-#         # 创建一个测试信号（包含静音段和语音段）
-#         sr = 16000
-#         t = tf.range(int(sr * 1), dtype=tf.float32)
-#         signal = tf.concat([
-#             tf.zeros(int(sr * 0.5)),  # 0.5秒静音
-#             tf.sin(2 * np.pi * 500 * t / sr),  # 1秒语音
-#             tf.zeros(int(sr * 0.5))  # 0.5秒静音
-#         ], axis=0)
-#
-#         # 调用 endpoint_detection 函数
-#         trimmed_signal = endpoint_detection(
-#             signal,
-#             frame_length=int(sr * 0.025),  # 25ms帧长
-#             hop_length=int(sr * 0.010),  # 10ms帧移
-#             energy_threshold=0.1 * tf.reduce_max(tf.square(signal)),  # 能量阈值
-#             zcr_threshold=0.25  # 过零率阈值
-#         )
-#
-#         # 检查输出信号是否符合预期
-#         self.assertGreater(len(trimmed_signal), 0)  # 输出信号长度应大于0
-#         self.assertLess(len(trimmed_signal), len(signal))  # 输出信号应短于原始信号
-#         self.assertEqual(trimmed_signal.shape.ndims, 1)  # 输出信号应为一维张量
-#
-#     def test_endpoint_detection_file(self):
-#         # 创建一个测试信号
-#
-#         # file_path = "D:/PycharmProjects/wark_by_voice/verify/0_non_wake/在木地板上翻滚-YS070515.wav"
-#         file_path = "D:/PycharmProjects/wark_by_voice/verify/1_wake/c_ya_mid_2_10_2_noisy.wav"
-#
-#         # 加载音频文件
-#         assert isinstance(file_path, str), "file_path must be str"
-#         # 用tensorflow自带的库
-#         audio_binary = tf.io.read_file(file_path)
-#         wave, s_rate = tf.audio.decode_wav(audio_binary, desired_channels=1)
-#         wave = squeezing(wave)
-#         print(f"wave:{wave},wave_max{tf.reduce_max(wave)}")
-#
-#         sr = tf.cast(s_rate, dtype=tf.float32)
-#         trimmed_signal = del_signal_ini(sr, wave)
-#
-#         # 检查输出信号是否符合预期
-#         self.assertGreater(len(trimmed_signal), 0)  # 输出信号长度应大于0
-#         self.assertLess(len(trimmed_signal), len(wave))  # 输出信号应短于原始信号
-#         self.assertEqual(trimmed_signal.shape.ndims, 1)  # 输出信号应为一维张量
-
-
 if __name__ == '__main__':
     # tf.test.main()
     # 示例用法
-    input_folder = "D:/PycharmProjects/wark_by_voice/sample_train/1_wake"
-    output_folder = "D:/PycharmProjects/wark_by_voice/临时效果1_wake"
+    input_folder = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\唤醒词\\1_wake_mini1"
+    output_folder = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\唤醒词\\1_wake_mini1\临时效果1_wake"
     process_wav_files(input_folder, output_folder)
 
 

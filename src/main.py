@@ -1,21 +1,17 @@
-from pathlib import Path
+import gc
+import seaborn as sns
+from pyasn1_modules.rfc2251 import maxInt
 
-from src.model.export_model import ExportModel
-from src.preprocessing.data_preprocessing import normalize_data, preprocess_data
+from pydub import AudioSegment
+from tensorflow.keras import layers
+from data_loader import *
+from draw import *
+from src.model.export_model import *
 from src.model.model_builder import EnhancedWakeModel
 from src.model.model_trainer import compile_model, train_model
 from src.model.utils import CustomEarlyStopping
-import seaborn as sns
-
-from tensorflow.keras import layers
-
-from pydub import AudioSegment
-
-import gc
-from draw import *
-from src.model.export_model import *
 from src.preprocessing.Pretreatment import *
-from data_loader import *
+
 gc.collect()    # 清理不必要的内存
 
 # 动态分配内存
@@ -42,11 +38,11 @@ def convert_to_16bit_wav(input_path, output_path):
 
 
 Batch = 128     # 训练样本数量
-epochs = 1
+epochs = 10
 f_block = 16     # 每次从一类文件中取出几个
 a_balance = 0.5        # 控制样本平衡(更偏爱优化负类)
-gamma_punish = 0.5
-l2_reg = 1e-4
+gamma_punish = 0.3
+l2_reg = 1e-3
 
 # # 设定一个固定的 buffer_size
 # buffer_size = 5120   # 缓冲区大小设定为 5120
@@ -185,7 +181,9 @@ if __name__ == "__main__":
     y_pred = model.predict(val_ds)
     y_pred_class = tf.cast(y_pred > 0.5, tf.int32).numpy().flatten()
     print("y_pred_class shape:", y_pred_class.shape)
-    print("y_pred:", y_pred)
+    print("y_pred:")
+    for row in y_pred:
+        print(row)
 
     # 确保长度一致
     if len(y_true) != len(y_pred_class):
@@ -206,6 +204,8 @@ if __name__ == "__main__":
     plt.ylabel('True')
     plt.title('Confusion Matrix')
     plt.show()
+
+
 
 
 

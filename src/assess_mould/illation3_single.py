@@ -79,8 +79,8 @@ loaded_model = tf.saved_model.load(model_path)
 
 # 准备测试音频路径
 # data_dir = Path("D:/PycharmProjects/wark_by_voice/verify/1_wake")
-data_dir = Path("D:/PycharmProjects/wark_by_voice/train_sample/0_non_wake")
-audio_file_path = str(data_dir / '1森林－昆虫－mcx20070416.wav')
+data_dir = Path("D:/PycharmProjects/wark_by_voice/dev_sample/1_wake")
+audio_file_path = str(data_dir / 'SV0252_5_11_S1408.wav')
 
 # print(list(loaded_model.signatures.keys()))  # 通常为 "serving_default"
 # infer = loaded_model.signatures["serving_default"]

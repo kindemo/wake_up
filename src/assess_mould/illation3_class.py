@@ -8,10 +8,10 @@ import numpy as np
 plt.rcParams['font.sans-serif'] = ['SimHei']
 plt.rcParams['axes.unicode_minus'] = False
 
-data_dir = Path("D:/PycharmProjects/wark_by_voice/dev_sample/0_non_wake")
+data_dir = Path("D:/PycharmProjects/wark_by_voice/dev_sample/1_wake")
 time_step = 0.4
 max_duration = 1
-batch_size = 80  # 每页曲线数量
+batch_size = 30  # 每页曲线数量
 
 # 获取所有文件列表
 file_list = list(data_dir.glob('*.wav'))
@@ -49,7 +49,7 @@ for page_idx in range(0, min(total_files, 400), batch_size):
         plt.plot(time_points[:truncate_idx],
                  predictions[:truncate_idx],
                  alpha=0.7,
-                 linewidth=1.2,
+                 linewidth=1,
                  color=color,
                  label=f'{i}. {file_path.stem[:12]}')  # 添加序号防止混淆
 
@@ -62,7 +62,9 @@ for page_idx in range(0, min(total_files, 400), batch_size):
     plt.xlabel('时间（秒）', fontsize=12)
     plt.ylabel('预测值', fontsize=12)
     plt.xlim(0, max_duration)
+
     plt.ylim(-0.05, 1.05)
+
 
     # 智能图例布局
     plt.legend(
@@ -83,3 +85,4 @@ for page_idx in range(0, min(total_files, 400), batch_size):
 # 打印汇总信息
 print(f'共处理 {total_files} 个文件')
 print(f'生成 {((total_files - 1) // batch_size) + 1} 张图表')
+

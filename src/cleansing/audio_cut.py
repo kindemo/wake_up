@@ -54,6 +54,6 @@ def process_audio_files(input_folder, output_folder):
 
 # 示例用法
 if __name__ == "__main__":
-    input_folder = r"D:\PycharmProjects\wark_by_voice\train_sample\1_wake"  # 替换为你的输入文件夹路径
-    output_folder = r"D:\PycharmProjects\wark_by_voice\train_sample\1_wake_cut"  # 替换为你的输出文件夹路径
+    input_folder = r"D:\PycharmProjects\wark_by_voice\原素材\aishell_train\speech"  # 替换为你的输入文件夹路径
+    output_folder = r"D:\PycharmProjects\wark_by_voice\原素材\aishell_train\speech\cut"  # 替换为你的输出文件夹路径
     process_audio_files(input_folder, output_folder)
