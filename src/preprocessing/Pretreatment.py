@@ -13,7 +13,7 @@ from src.preprocessing.windowing import get_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
 
 
-def split_audio_windows(wave, frame_length=400, num_win=33):
+def split_audio_windows(wave, frame_length=400, num_win=56):
     """
     去除单声道数据并调用分帧
     :param wave: 波形数据需要是TensorFlow 张量
@@ -62,7 +62,7 @@ def split_audio_windows(wave, frame_length=400, num_win=33):
     #     return tf.zeros((1, sum_mfcc_frames, n_mfcc), dtype=tf.float32)
 
 
-def loading_file2windows(file_path, frame_length=400, num_win=33):
+def loading_file2windows(file_path, frame_length=400, num_win=56):
     """
     解析文件返回波，调用windows函数
     输入： 文件路径
@@ -105,7 +105,7 @@ def loading_file2windows(file_path, frame_length=400, num_win=33):
     return split_audio_windows(wave, frame_length, num_win)
 
 
-def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=33):
+def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=56):
     """
     加载音频文件并划分通道，返回通道和标签。
     """
@@ -124,12 +124,12 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     )
 
     # 重点关注
-    windows.set_shape([None, 13200])
+    windows.set_shape([None, num_win*400])
     labels.set_shape([None])
     return windows, labels
 
 
-def preprocess_dataset(dataset, frame_length=400, n_mfcc=13, num_win=33):
+def preprocess_dataset(dataset, frame_length=400, n_mfcc=13, num_win=56):
     """
     预处理数据集，加载并划分音频文件。
     返回: 数据集

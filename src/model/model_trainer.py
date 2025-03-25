@@ -39,8 +39,8 @@ def compile_model(model, gamma, alpha_balance):
 def train_model(model, train_ds, val_ds, epochs, callbacks):
     # 确保数据集已经设置了批次大小
     print(f'train_shape:{train_ds.element_spec[0].shape}')
-    assert train_ds.element_spec[0].shape[1:] == 13200, "Train dataset must have correct feature shape"
-    assert val_ds.element_spec[0].shape[1:] == 13200, "Validation dataset must have correct feature shape"
+    assert train_ds.element_spec[0].shape[1:] == 22400, "Train dataset must have correct feature shape"
+    assert val_ds.element_spec[0].shape[1:] == 22400, "Validation dataset must have correct feature shape"
 
     history = model.fit(
         train_ds,

@@ -69,8 +69,8 @@ if __name__ == "__main__":
         print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
 
 
-    dataset, labels = preprocess_dataset(dataset, num_win=33)              # train 加載自定義預處理
-    dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=33)  # dev 加載自定義預處理
+    dataset, labels = preprocess_dataset(dataset, num_win=56)              # train 加載自定義預處理
+    dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=56)  # dev 加載自定義預處理
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     history = train_model(model, train_ds, val_ds, epochs, callbacks)
 
 
-    export = ExportModel(model, num_win=33)
+    export = ExportModel(model, num_win=56)
 
     # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
 
@@ -170,40 +170,6 @@ if __name__ == "__main__":
     # history 属性是一个字典，记录了训练过程中的各种指标，如损失和准确率
     plot_training_history(history, figsize=(16, 6))
 
-    print("开始输出混淆矩阵：")
-    all_labels_class = ['0_non_wake', '1_wake']
-    # 解批数据集并提取真实标签
-    y_true = tf.concat(list(val_ds.unbatch().map(lambda s, lab: lab)), axis=0)
-    print("y_true shape:", y_true.shape)
-    print("y_true:", y_true.numpy())
-
-    # 模型预测
-    y_pred = model.predict(val_ds)
-    y_pred_class = tf.cast(y_pred > 0.5, tf.int32).numpy().flatten()
-    print("y_pred_class shape:", y_pred_class.shape)
-    print("y_pred:")
-    for row in y_pred:
-        print(row)
-
-    # 确保长度一致
-    if len(y_true) != len(y_pred_class):
-        raise ValueError("y_true and y_pred_class have different lengths!")
-
-    # 计算混淆矩阵
-    confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
-    print("Confusion Matrix:")
-    print(confusion_mtx.numpy())
-
-    # 绘制混淆矩阵
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(confusion_mtx,
-                xticklabels=all_labels_class,
-                yticklabels=all_labels_class,
-                annot=True, fmt='g', cmap='Blues')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    plt.show()
 
 
 
@@ -211,6 +177,48 @@ if __name__ == "__main__":
 
 
 
+
+
+
+
+
+
+
+
+    # print("开始输出混淆矩阵：")
+    # all_labels_class = ['0_non_wake', '1_wake']
+    # # 解批数据集并提取真实标签
+    # y_true = tf.concat(list(val_ds.unbatch().map(lambda s, lab: lab)), axis=0)
+    # print("y_true shape:", y_true.shape)
+    # print("y_true:", y_true.numpy())
+    #
+    # # 模型预测
+    # y_pred = model.predict(val_ds)
+    # y_pred_class = tf.cast(y_pred > 0.5, tf.int32).numpy().flatten()
+    # print("y_pred_class shape:", y_pred_class.shape)
+    # print("y_pred:")
+    # for row in y_pred:
+    #     print(row)
+    #
+    # # 确保长度一致
+    # if len(y_true) != len(y_pred_class):
+    #     raise ValueError("y_true and y_pred_class have different lengths!")
+    #
+    # # 计算混淆矩阵
+    # confusion_mtx = tf.math.confusion_matrix(y_true, y_pred_class)
+    # print("Confusion Matrix:")
+    # print(confusion_mtx.numpy())
+    #
+    # # 绘制混淆矩阵
+    # plt.figure(figsize=(10, 8))
+    # sns.heatmap(confusion_mtx,
+    #             xticklabels=all_labels_class,
+    #             yticklabels=all_labels_class,
+    #             annot=True, fmt='g', cmap='Blues')
+    # plt.xlabel('Predicted')
+    # plt.ylabel('True')
+    # plt.title('Confusion Matrix')
+    # plt.show()
 
 
     # 划分为训练集和验证集

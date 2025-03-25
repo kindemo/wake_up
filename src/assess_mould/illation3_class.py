@@ -28,7 +28,7 @@ for page_idx in range(0, min(total_files, 400), batch_size):
     plt.figure(figsize=(18, 10))  # 适当增加画布宽度
 
     # 获取当前页文件
-    current_files = file_list[page_idx:page_idx + batch_size]
+    current_files = file_list[page_idx: page_idx + batch_size]
 
     # 绘制当前页的曲线
     for i, file_path in enumerate(current_files, 1):
@@ -85,4 +85,9 @@ for page_idx in range(0, min(total_files, 400), batch_size):
 # 打印汇总信息
 print(f'共处理 {total_files} 个文件')
 print(f'生成 {((total_files - 1) // batch_size) + 1} 张图表')
+
+
+
+
+#
 

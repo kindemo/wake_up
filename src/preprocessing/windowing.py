@@ -55,7 +55,7 @@ import tensorflow as tf
 def get_windows(waveform: tf.Tensor,
                 frame_length=400,
                 frame_step=400,
-                num_windows=33) -> tf.Tensor:
+                num_windows=56) -> tf.Tensor:
     """
     改进版音频分帧处理，实现大分帧生成
 

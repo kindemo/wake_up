@@ -5,7 +5,7 @@ from src.preprocessing.wave_processing import squeeze as squeezing
 
 
 class ExportModel(tf.Module):
-    def __init__(self, model, frame_length=400, n_mfcc=13, num_win=33):
+    def __init__(self, model, frame_length=400, n_mfcc=13, num_win=56):
         super().__init__()
         self.model = model
         self.frame_length = frame_length
@@ -18,7 +18,7 @@ class ExportModel(tf.Module):
             x=tf.TensorSpec(shape=(), dtype=tf.string)
         )
         self.wave_signature = self.__call__.get_concrete_function(
-            x=tf.TensorSpec(shape=[1, 13200], dtype=tf.float32)
+            x=tf.TensorSpec(shape=[1, num_win*400], dtype=tf.float32)
         )
 
     @tf.function

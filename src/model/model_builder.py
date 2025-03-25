@@ -204,11 +204,11 @@ if __name__ == "__main__":
 
     # 测试模型构建
     model = EnhancedWakeModel()
-    model.build(input_shape=(None, 13200))  # 输入维度匹配原始数据
+    model.build(input_shape=(None, 22400))  # 输入维度匹配原始数据
     model.summary()
 
     # 验证前向传播
-    test_input = tf.random.normal((32, 13200))  # 批量大小为32的示例输入
+    test_input = tf.random.normal((32, 22400))  # 批量大小为32的示例输入
     output = model(test_input)
     print(output.shape)  # 应输出 (32, 1)
 
