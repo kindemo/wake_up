@@ -7,6 +7,11 @@ import tensorflow as tf
 #     loss_fn = weighted_binary_crossentropy(weights)
 #     model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
 
+def custom_accuracy(y_true, y_pred):
+    y_true_hard = tf.round(y_true)  # 软标签转硬标签
+    y_pred_hard = tf.round(y_pred)
+    return tf.keras.metrics.binary_accuracy(y_true_hard, y_pred_hard)
+
 
 def compile_model(model, gamma, alpha_balance):
     """
@@ -22,7 +27,7 @@ def compile_model(model, gamma, alpha_balance):
         optimizer='adam',
         loss=loss_fn,
         metrics=[
-            'accuracy',
+            custom_accuracy,
             tf.keras.metrics.Precision(name='prec'),
             tf.keras.metrics.Recall(name='rec'),
             tf.keras.metrics.AUC(name='auc'),  # 默认计算 ROC-AUC
@@ -36,11 +41,11 @@ def compile_model(model, gamma, alpha_balance):
 
 
 
-def train_model(model, train_ds, val_ds, epochs, callbacks):
+def train_model(model, train_ds, val_ds, epochs, callbacks, num_win=56):
     # 确保数据集已经设置了批次大小
     print(f'train_shape:{train_ds.element_spec[0].shape}')
-    assert train_ds.element_spec[0].shape[1:] == 22400, "Train dataset must have correct feature shape"
-    assert val_ds.element_spec[0].shape[1:] == 22400, "Validation dataset must have correct feature shape"
+    assert train_ds.element_spec[0].shape[1:] == num_win*400, "Train dataset must have correct feature shape"
+    assert val_ds.element_spec[0].shape[1:] == num_win*400, "Validation dataset must have correct feature shape"
 
     history = model.fit(
         train_ds,

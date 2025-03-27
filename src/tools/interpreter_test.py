@@ -2,12 +2,12 @@ import tensorflow as tf
 import numpy as np
 
 # 测试TFLite模型是否正常工作
-interpreter = tf.lite.Interpreter("model_wave3.tflite")
+interpreter = tf.lite.Interpreter("D:/PycharmProjects/wark_by_voice/tflite_model/tflite_wave3.tflite")
 
 interpreter.allocate_tensors()
 
 # 准备与Java端相同的输入（12800个随机样本）
-test_input = np.random.randn(1, 12800).astype(np.float32)
+test_input = np.random.randn(1, 22400).astype(np.float32)
 interpreter.set_tensor(interpreter.get_input_details()[0]['index'], test_input)
 
 # 触发推理（此处应复现Java端的错误）

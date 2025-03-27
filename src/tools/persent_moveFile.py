@@ -50,8 +50,8 @@ def move_wav_files_randomly(parent_folder, new_folder_name, percent):
     print(f"随机选取并移动文件完成！总共移动了 {len(selected_files)} 个文件。")
 
 # 使用示例
-parent_folder = r"D:\PycharmProjects\wark_by_voice\原素材\LibriSpeech_son_train"
-new_folder_name = "LibriSpeech_mini"  # 新文件夹的名称
-percent = 0.5  # 随机选取的百分比，例如0.5表示选取50%
+parent_folder = r"D:\PycharmProjects\wark_by_voice\原素材\父集合\wake_dev\dev\SPEECHDATA\wav"
+new_folder_name = "dev_mini"  # 新文件夹的名称
+percent = 0.01  # 随机选取的百分比，例如0.5表示选取50%
 
 move_wav_files_randomly(parent_folder, new_folder_name, percent)

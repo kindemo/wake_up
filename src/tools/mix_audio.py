@@ -81,9 +81,9 @@ def mix_audio(folder_a, folder_b, output_folder, ratio_a=0.7, output_format="wav
 if __name__ == "__main__":
     # 配置参数
     FOLDER_A = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\唤醒词\\1_wake_mini1"
-    FOLDER_B = "D:\PycharmProjects\wark_by_voice\原素材\HuanJing_train"
-    OUTPUT_FOLDER = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\唤醒词\\1_wake_mini1_huanJing"
-    MIX_RATIO = 0.95  # A音频比例
+    FOLDER_B = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\非唤醒词\car_sounds"
+    OUTPUT_FOLDER = "D:\PycharmProjects\wark_by_voice\\train_sample\sofr_wake_0.8"
+    MIX_RATIO = 0.8  # A音频比例
 
     # 执行混合
     mix_audio(FOLDER_A, FOLDER_B, OUTPUT_FOLDER, MIX_RATIO)

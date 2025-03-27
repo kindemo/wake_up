@@ -5,7 +5,7 @@ import seaborn as sns
 from sklearn.metrics import roc_curve, roc_auc_score
 from tensorflow.python.ops.ragged.ragged_array_ops import expand_dims
 
-from src.data_loader import create_interleaved_dataset, load_dataset
+from src.data_loader import create_interleaved_dataset, load_dataset_dev, load_dataset_train
 from src.preprocessing.Pretreatment import load_and_split_audio, preprocess_dataset
 
 # 配置参数
@@ -17,7 +17,7 @@ batch_size = 32
 model = tf.saved_model.load("D:/PycharmProjects/wark_by_voice/saved")
 data_dev_dir = "D:/PycharmProjects/wark_by_voice/dev_sample"
 
-dev_file_paths, labels_dev = load_dataset(data_dev_dir)  # 加载模型训练文件
+dev_file_paths, labels_dev = load_dataset_dev(data_dev_dir)  # 加载模型训练文件
 dataset_dev = create_interleaved_dataset(dev_file_paths, labels_dev, block_size=f_block)  # 路径和标签绑定的dataset dev
 dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=56)  # dev 加載自定義預處理
 
@@ -38,7 +38,8 @@ for batch in dataset_dev:
 
 # 将概率转换为二分类预测
 threshold = 0.5
-binary_pred = [1 if p >= threshold else 0 for p in all_pred]
+binary_pred = np.where(np.array(all_pred) >= threshold, 1, 0)
+all_labels = np.where(np.array(all_labels) >= threshold, 1, 0)
 
 # 初始化四个指标
 TP = 0  # 真正例
@@ -98,8 +99,8 @@ plt.show()
 
 
 # 将预测结果和标签转换为numpy数组
-all_pred_probs = np.concatenate([p.numpy().reshape(-1) for p in all_pred])  # 确保每个元素是一维数组
-all_labels = np.concatenate([l.numpy().reshape(-1) for l in all_labels]).astype(np.int32)  # 确保标签也是一维
+# all_pred_probs = np.concatenate([p.reshape(-1) for p in all_pred])  # 确保每个元素是一维数组
+# all_labels = np.concatenate([l.reshape(-1) for l in all_labels]).astype(np.int32)  # 确保标签也是一维
 
 
 # 计算其他评估指标
@@ -107,19 +108,22 @@ accuracy = (TP + TN) / (TP + TN + FP + FN)
 precision = TP / (TP + FP) if (TP + FP) != 0 else 0
 recall = TP / (TP + FN) if (TP + FN) != 0 else 0
 f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+f_kws = FP /(TP + FP) if (TP + FP) != 0 else 0
 
 print("\nAdditional Metrics:")
 print(f"Accuracy: {accuracy:.4f}")
 print(f"Precision: {precision:.4f}")
-print(f"Recall: {recall:.4f}")
+print(f"KWS rate: {recall:.4f}")
+print(f"wrong KWS rate: {f_kws:.4f}")
 print(f"F1 Score: {f1:.4f}")
 
+
 # 绘制评估指标柱状图
-metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-values = [accuracy, precision, recall, f1]
+metrics = ['Accuracy', 'Precision', 'Recall(wake)','wrong wake','F1 Score']
+values = [accuracy, precision, recall, f_kws, f1]
 
 plt.figure(figsize=(8, 5))
-bars = plt.bar(metrics, values, color=['blue', 'green', 'orange', 'red'])
+bars = plt.bar(metrics, values, color=['blue', 'green', 'orange', 'red', 'pink'])
 plt.ylim(0, 1)
 plt.title('Model Performance Metrics')
 plt.ylabel('Score')
@@ -128,14 +132,18 @@ plt.ylabel('Score')
 for bar in bars:
     height = bar.get_height()
     plt.text(bar.get_x() + bar.get_width()/2., height,
-             f'{height:.2f}',
+             f'{height:.3f}',
              ha='center', va='bottom')
 
 plt.show()
 
+# 确保为一维
+all_pred_1d = np.array(all_pred).flatten()
+all_labels = all_labels.flatten()
+
 # 计算ROC曲线和AUC
-fpr, tpr, thresholds = roc_curve(all_labels, all_pred_probs)
-roc_auc = roc_auc_score(all_labels, all_pred_probs)
+fpr, tpr, thresholds = roc_curve(all_labels, all_pred_1d)
+roc_auc = roc_auc_score(all_labels, all_pred_1d)
 
 # 绘制ROC曲线
 plt.figure(figsize=(8, 6))

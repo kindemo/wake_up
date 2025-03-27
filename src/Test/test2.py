@@ -33,7 +33,7 @@ def load_and_split_audio(file_path, label):
     channels, labels = tf.py_function(
         py_load_and_split_audio,
         [file_path, label],
-        [tf.float32, tf.int32]  # 根据实际情况调整输出类型
+        [tf.float32, tf.float32]  # 根据实际情况调整输出类型
     )
     channels.set_shape([None, None, None])
     labels.set_shape([None])
@@ -41,5 +41,5 @@ def load_and_split_audio(file_path, label):
 
 # 测试代码
 file_path = tf.constant("test.wav")
-label = tf.constant(1, dtype=tf.int32)
+label = tf.constant(1, dtype=tf.float32)
 channels, labels = load_and_split_audio(file_path, label)

@@ -1,16 +1,12 @@
 import unittest
 import warnings
-from pathlib import Path
 from unittest.mock import patch
 
-import librosa
 import scipy.io.wavfile as wavfile
 import tensorflow as tf
 
-from src.preprocessing.Augmentation import AudioAugmenter
-from src.preprocessing.Spectrum_processing import get_mfcc
-from src.preprocessing.windowing import get_windows
 from src.preprocessing.wave_processing import squeeze as squeezing
+from src.preprocessing.windowing import get_windows
 
 
 def split_audio_windows(wave, frame_length=400, num_win=56):
@@ -105,7 +101,7 @@ def loading_file2windows(file_path, frame_length=400, num_win=56):
     return split_audio_windows(wave, frame_length, num_win)
 
 
-def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13, num_win=56):
+def load_and_split_audio(file_path: str, label: float, frame_length=400, n_mfcc=13, num_win=56):
     """
     加载音频文件并划分通道，返回通道和标签。
     """
@@ -120,7 +116,7 @@ def load_and_split_audio(file_path: str, label: int, frame_length=400, n_mfcc=13
     windows, labels = tf.numpy_function(
         py_load_and_split_audio,
         [file_path, label],
-        [tf.float32, tf.int32]
+        [tf.float32, tf.float32]
     )
 
     # 重点关注
@@ -162,14 +158,14 @@ class TestLoadAndSplitAudio(unittest.TestCase):
         # 定义测试输入
 
         file_path = str("D:/PycharmProjects/wark_by_voice/verify/0_non_wake/1森林－昆虫－mcx20070416.wav")
-        label = tf.constant(0, dtype=tf.int32)
+        label = tf.constant(0, dtype=tf.float32)
 
         # 调用被测试函数
         windows, labels = load_and_split_audio(file_path, label, num_win=31)
 
         # 检查输出类型
         self.assertEqual(windows.dtype, tf.float32)
-        self.assertEqual(labels.dtype, tf.int32)
+        self.assertEqual(labels.dtype, tf.float32)
 
         # 检查输出形状
         self.assertEqual(len(windows.shape), 3)

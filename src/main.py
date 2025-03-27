@@ -37,12 +37,14 @@ def convert_to_16bit_wav(input_path, output_path):
     audio.export(output_path, format="wav")
 
 
-Batch = 128     # 训练样本数量
-epochs = 10
-f_block = 16     # 每次从一类文件中取出几个
-a_balance = 0.5        # 控制样本平衡(更偏爱优化负类)
-gamma_punish = 0.3
+Batch = 128      # 训练样本数量
+epochs = 15
+f_block = 4         # 每次从一类文件中取出几个
+a_balance = 0.70        # 控制样本平衡(更偏爱优化正类)
+gamma_punish = 0.1
 l2_reg = 1e-3
+num_win = 56
+
 
 # # 设定一个固定的 buffer_size
 # buffer_size = 5120   # 缓冲区大小设定为 5120
@@ -57,10 +59,10 @@ if __name__ == "__main__":
     data_dev_dir = "D:/PycharmProjects/wark_by_voice/dev_sample"
 
 
-    file_paths, labels = load_dataset(data_dir)  # 加载模型训练文件
-    dataset = create_interleaved_dataset(file_paths, labels, block_size=f_block)        # 路径和标签绑定的dataset
+    file_paths, labels = load_dataset_train(data_dir)  # 加载模型训练文件
+    dataset = create_interleaved_dataset(file_paths, labels, block_size=f_block, is_training=True)        # 路径和标签绑定的dataset
 
-    dev_file_paths, labels_dev = load_dataset(data_dev_dir)  # 加载模型训练文件
+    dev_file_paths, labels_dev = load_dataset_dev(data_dev_dir)  # 加载模型训练文件
     dataset_dev = create_interleaved_dataset(dev_file_paths, labels_dev, block_size=f_block)  # 路径和标签绑定的dataset dev
 
     # # 打印前几个元素验证标签分配
@@ -69,8 +71,8 @@ if __name__ == "__main__":
         print(f"File path: {file_path.numpy().decode('utf-8')}, Label: {label.numpy()}")
 
 
-    dataset, labels = preprocess_dataset(dataset, num_win=56)              # train 加載自定義預處理
-    dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=56)  # dev 加載自定義預處理
+    dataset, labels = preprocess_dataset(dataset, num_win=num_win)              # train 加載自定義預處理
+    dataset_dev, labels_dev = preprocess_dataset(dataset_dev, num_win=num_win)  # dev 加載自定義預處理
 
     # # 迭代一次数据集，确保数据被加载
     # for batch in dataset.take(1):  # 只迭代一个批次
@@ -124,10 +126,10 @@ if __name__ == "__main__":
         CustomEarlyStopping(patience=3, train_accuracy_threshold=0.9),
         tf.keras.callbacks.TensorBoard(log_dir='../logs', histogram_freq=1, update_freq='epoch')
     ]
-    history = train_model(model, train_ds, val_ds, epochs, callbacks)
+    history = train_model(model, train_ds, val_ds, epochs, callbacks, num_win)
 
 
-    export = ExportModel(model, num_win=56)
+    export = ExportModel(model, num_win=num_win)
 
     # tf.saved_model.save(export, "D:/PycharmProjects/wark_by_voice/saved")
 

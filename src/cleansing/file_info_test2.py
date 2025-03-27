@@ -73,7 +73,7 @@ def scan_and_process(directory, target_rate=16000, target_bits=16):
 
 def main():
     # 设置目标目录
-    data_dir = "D:\PycharmProjects\wark_by_voice\原素材\HuanJing_train"
+    data_dir = "D:\PycharmProjects\wark_by_voice\原素材\缓存器\非唤醒词\car_sounds"
 
     if not os.path.exists(data_dir):
         logging.error("目录不存在！")
